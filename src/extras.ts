@@ -520,20 +520,52 @@ export function registerExtras(app: App) {
     if (!(await financeSession(c, ["finance_lead"]))) return c.json({ error: "Unauthorized" }, 401);
 
     const status = (c.req.query("status") || "PENDING").toUpperCase();
+    const threshold = parseFloat(c.env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+
+    // Always rebuild missing pending payouts from wallets already at/over threshold
     if (status === "PENDING" || status === "ALL") await syncAllPayouts(c.env);
 
     const { results } = await c.env.DB.prepare(
       `SELECT p.id, p.mobile_number, p.amount_lkr, p.status, p.erp_reference, p.bank_reference, p.bound_by, p.bound_at, p.created_at,
               b.account_name, b.account_number, b.bank_name, b.branch_name,
+              w.balance_lkr AS wallet_balance,
               (SELECT COUNT(*) FROM submissions s WHERE s.mobile_number = p.mobile_number AND s.status = 'APPROVED') AS approved_claims
-       FROM payouts p LEFT JOIN customer_bank_details b ON b.mobile_number = p.mobile_number
+       FROM payouts p
+       LEFT JOIN customer_bank_details b ON b.mobile_number = p.mobile_number
+       LEFT JOIN wallets w ON w.mobile_number = p.mobile_number
        WHERE (? = 'ALL' OR p.status = ?)
        ORDER BY p.created_at DESC`
     )
       .bind(status, status)
       .all();
 
-    return c.json({ payouts: results, threshold: parseFloat(c.env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000 });
+    // Diagnostic: every wallet at/over threshold (explains empty list)
+    const { results: eligible } = await c.env.DB.prepare(
+      `SELECT w.mobile_number, w.balance_lkr, w.status AS wallet_status,
+              (SELECT COUNT(*) FROM payouts p WHERE p.mobile_number = w.mobile_number AND p.status = 'PENDING') AS pending_payouts,
+              (SELECT COUNT(*) FROM customer_bank_details b WHERE b.mobile_number = w.mobile_number) AS has_bank
+       FROM wallets w
+       WHERE w.balance_lkr >= ?
+       ORDER BY w.balance_lkr DESC
+       LIMIT 100`
+    )
+      .bind(threshold)
+      .all();
+
+    return c.json({
+      payouts: results,
+      eligible,
+      threshold,
+      apiVersion: "2026-09-24-payout-sync",
+      synced: true,
+    });
+  });
+
+  app.get("/api/version", async (c) => {
+    return c.json({
+      apiVersion: "2026-09-24-payout-sync",
+      features: ["device-insights", "payout-sync", "location-parse", "customer-profile", "bank-prefill"],
+    });
   });
 
   app.post("/api/finance-lead/payouts/export-log", async (c) => {

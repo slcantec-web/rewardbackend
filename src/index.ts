@@ -3,10 +3,15 @@ import { cors } from "hono/cors";
 import type { Env, CreateSubmissionPayload } from "./types";
 import { evaluateFraud, perceptualHashFromBytes, deviceFingerprintHash } from "./fraud";
 import { signSession, verifySession, requireRole, type SessionPayload } from "./auth";
+import { registerExtras } from "./extras";
 
 const app = new Hono<{ Bindings: Env }>();
 
 app.use("*", cors());
+
+// Enhanced routes FIRST so they win over base routes with the same path
+// (device insights, payout sync, location parsing, richer finance APIs).
+registerExtras(app);
 
 // ============================================================
 // Helpers
@@ -218,67 +223,7 @@ app.get("/api/track", async (c) => {
 });
 
 // ============================================================
-// Customer: Bank details (required once wallet reaches payout threshold)
-// ============================================================
-
-async function verifyOwnership(db: D1Database, mobile: string, submissionId: string): Promise<boolean> {
-  const row = await db
-    .prepare(`SELECT id FROM submissions WHERE id = ? AND mobile_number = ?`)
-    .bind(submissionId, mobile)
-    .first();
-  return !!row;
-}
-
-app.get("/api/track/bank-details", async (c) => {
-  const mobile = c.req.query("mobile");
-  const submissionId = c.req.query("submissionId");
-  if (!mobile || !submissionId) return c.json({ error: "mobile and submissionId are required" }, 400);
-  if (!(await verifyOwnership(c.env.DB, mobile, submissionId))) return c.json({ error: "Not found" }, 404);
-
-  const details = await c.env.DB.prepare(
-    `SELECT account_name, account_number, bank_name, branch_name FROM customer_bank_details WHERE mobile_number = ?`
-  )
-    .bind(mobile)
-    .first<{ account_name: string; account_number: string; bank_name: string; branch_name: string | null }>();
-
-  if (!details) return c.json({ hasDetails: false });
-
-  // Mask all but the last 4 digits when echoing back for display.
-  const masked = details.account_number.replace(/.(?=.{4})/g, "•");
-  return c.json({ hasDetails: true, details: { ...details, account_number: masked } });
-});
-
-app.post("/api/track/bank-details", async (c) => {
-  const body = await c.req.json<{
-    mobile: string;
-    submissionId: string;
-    accountName: string;
-    accountNumber: string;
-    bankName: string;
-    branchName?: string;
-  }>();
-
-  if (!body.mobile || !body.submissionId) return c.json({ error: "mobile and submissionId are required" }, 400);
-  if (!(await verifyOwnership(c.env.DB, body.mobile, body.submissionId))) return c.json({ error: "Not found" }, 404);
-  if (!body.accountName || !body.accountNumber || !body.bankName) {
-    return c.json({ error: "Account name, account number, and bank name are required" }, 400);
-  }
-
-  await c.env.DB.prepare(
-    `INSERT INTO customer_bank_details (mobile_number, account_name, account_number, bank_name, branch_name)
-     VALUES (?,?,?,?,?)
-     ON CONFLICT(mobile_number) DO UPDATE SET
-       account_name = excluded.account_name,
-       account_number = excluded.account_number,
-       bank_name = excluded.bank_name,
-       branch_name = excluded.branch_name,
-       updated_at = datetime('now')`
-  )
-    .bind(body.mobile, body.accountName, body.accountNumber, body.bankName, body.branchName || null)
-    .run();
-
-  return c.json({ ok: true });
-});
+// Bank details routes: provided by registerExtras (remembered per mobile)
 
 // ============================================================
 // Shared: Top submitted customers (Admin + Finance dashboards)
@@ -330,51 +275,9 @@ app.post("/api/auth/login", async (c) => {
 
 // ============================================================
 // Finance: Review queue & actions
+// queue / detail / approve / payouts list live in extras.ts (registerExtras)
+// so device badges, customer profile, and payout-sync always apply.
 // ============================================================
-
-app.get("/api/finance/queue", async (c) => {
-  const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
-  if (!requireRole(session, ["finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
-
-  const status = c.req.query("status") || "PENDING";
-  const { results } = await c.env.DB.prepare(
-    `SELECT s.id, s.mobile_number, s.dealer_id, d.name as dealer_name, s.status, s.risk_score, s.fraud_flags,
-            s.created_at_server, s.total_claimed_reward_lkr
-     FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id
-     WHERE s.status = ? ORDER BY s.created_at_server ASC LIMIT 50`
-  )
-    .bind(status)
-    .all();
-  return c.json({ submissions: results });
-});
-
-app.get("/api/finance/submissions/:id", async (c) => {
-  const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
-  if (!requireRole(session, ["finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
-
-  const id = c.req.param("id");
-  const submission = await c.env.DB.prepare(
-    `SELECT s.*, d.name as dealer_name, d.city as dealer_city, d.latitude as dealer_lat, d.longitude as dealer_lng
-     FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id
-     WHERE s.id = ?`
-  )
-    .bind(id)
-    .first();
-  if (!submission) return c.json({ error: "Not found" }, 404);
-
-  const { results: items } = await c.env.DB.prepare(
-    `SELECT si.id, si.product_id, p.name, si.claimed_qty, si.verified_qty, si.rate_lkr_snapshot, si.line_reward_lkr
-     FROM submission_items si JOIN products p ON p.id = si.product_id
-     WHERE si.submission_id = ?`
-  )
-    .bind(id)
-    .all();
-
-  // Signed-ish URL placeholder: serve via a dedicated image route below.
-  const billImageUrl = `/api/finance/submissions/${id}/image`;
-
-  return c.json({ submission, items, billImageUrl });
-});
 
 app.get("/api/finance/submissions/:id/image", async (c) => {
   const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
@@ -420,61 +323,6 @@ app.post("/api/finance/submissions/:id/verify", async (c) => {
   return c.json({ ok: true });
 });
 
-app.post("/api/finance/submissions/:id/approve", async (c) => {
-  const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
-  if (!requireRole(session, ["finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
-
-  const id = c.req.param("id");
-
-  const totalRow = await c.env.DB.prepare(
-    `SELECT COALESCE(SUM(line_reward_lkr), 0) as total FROM submission_items WHERE submission_id = ?`
-  )
-    .bind(id)
-    .first<{ total: number }>();
-  const totalApproved = totalRow?.total ?? 0;
-
-  const submission = await c.env.DB.prepare(`SELECT mobile_number FROM submissions WHERE id = ?`)
-    .bind(id)
-    .first<{ mobile_number: string }>();
-  if (!submission) return c.json({ error: "Not found" }, 404);
-
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      `UPDATE submissions SET status = 'APPROVED', total_approved_reward_lkr = ?, reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?`
-    ).bind(totalApproved, session!.sub, id),
-    c.env.DB.prepare(
-      `INSERT INTO wallets (mobile_number, balance_lkr) VALUES (?, ?)
-       ON CONFLICT(mobile_number) DO UPDATE SET balance_lkr = balance_lkr + excluded.balance_lkr, updated_at = datetime('now')`
-    ).bind(submission.mobile_number, totalApproved),
-  ]);
-
-  // Threshold check → freeze wallet + create pending payout
-  const threshold = parseFloat(c.env.WALLET_PAYOUT_THRESHOLD_LKR || "1000");
-  const wallet = await c.env.DB.prepare(`SELECT balance_lkr FROM wallets WHERE mobile_number = ?`)
-    .bind(submission.mobile_number)
-    .first<{ balance_lkr: number }>();
-
-  if (wallet && wallet.balance_lkr >= threshold) {
-    await c.env.DB.batch([
-      c.env.DB.prepare(`UPDATE wallets SET status = 'PENDING_PAYOUT' WHERE mobile_number = ?`).bind(
-        submission.mobile_number
-      ),
-      c.env.DB.prepare(`INSERT INTO payouts (mobile_number, amount_lkr, status) VALUES (?, ?, 'PENDING')`).bind(
-        submission.mobile_number,
-        wallet.balance_lkr
-      ),
-    ]);
-  }
-
-  await c.env.DB.prepare(
-    `INSERT INTO finance_audit_trail (actor, submission_id, action, details_json) VALUES (?,?,?,?)`
-  )
-    .bind(session!.sub, id, "APPROVE", JSON.stringify({ totalApproved }))
-    .run();
-
-  return c.json({ ok: true, totalApproved });
-});
-
 app.post("/api/finance/submissions/:id/reject", async (c) => {
   const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
   if (!requireRole(session, ["finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
@@ -498,20 +346,8 @@ app.post("/api/finance/submissions/:id/reject", async (c) => {
 });
 
 // ============================================================
-// Finance Lead: Payouts & ERP/Bank reference binding
+// Finance Lead: bind only (list + sync live in extras.ts)
 // ============================================================
-
-app.get("/api/finance-lead/payouts", async (c) => {
-  const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
-  if (!requireRole(session, ["finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
-
-  const { results } = await c.env.DB.prepare(
-    `SELECT p.*, b.account_name, b.account_number, b.bank_name, b.branch_name
-     FROM payouts p LEFT JOIN customer_bank_details b ON b.mobile_number = p.mobile_number
-     WHERE p.status = 'PENDING' ORDER BY p.created_at ASC`
-  ).all();
-  return c.json({ payouts: results });
-});
 
 app.post("/api/finance-lead/payouts/:id/bind", async (c) => {
   const session = await getSession(c, c.env.FINANCE_JWT_SECRET);

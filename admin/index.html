@@ -62,7 +62,7 @@
 
 <div id="app" style="display:none;">
   <div class="app-header">
-    <h2>🛠️ Admin Panel</h2>
+    <h2>🛠️ Admin Panel <span style="font-size:0.7rem;opacity:0.75;font-weight:500;">v2026-09-24</span></h2>
     <nav><a href="/finance.html">Finance Dashboard →</a></nav>
     <div class="spacer"></div>
     <span class="who" id="whoLabel"></span>
@@ -319,20 +319,22 @@ function renderCustomers(dealers) {
       <div class="form-row">
         <input type="text" id="custAddress" placeholder="Address" />
         <input type="text" id="custCity" placeholder="City" />
-        <input type="text" id="custLat" placeholder="Latitude (for geofencing)" />
-        <input type="text" id="custLng" placeholder="Longitude (for geofencing)" />
+      </div>
+      <div class="form-row">
+        <input type="text" id="custLocation" placeholder="Location: paste Google Maps link or lat, lng (e.g. 6.9271, 79.8612)" style="flex:1;min-width:280px;" />
       </div>
       <div class="form-row">
         <button onclick="createCustomer()">Add Customer</button>
         <label class="secondary" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#374151;color:#fff;border-radius:8px;cursor:pointer;">
-          Upload Excel (.xlsx)
+          Upload Excel / CSV
           <input type="file" id="custExcelInput" accept=".xlsx,.xls,.csv" style="display:none;" />
         </label>
       </div>
       <div id="custMsg" class="msg"></div>
       <p style="color:var(--muted);font-size:0.85rem;">
-        Excel columns (header row required): <code>customerCode, name, contactPhone, address, city, latitude, longitude</code>.
-        Matches existing customers by <code>customerCode</code> and updates them; new codes are created.
+        <b>Location is optional.</b> Paste a Google Maps share link or <code>latitude, longitude</code> — no need to split lat/lng columns.
+        Excel/CSV headers: <code>customerCode, name, contactPhone, address, city, location</code>
+        (or legacy <code>latitude, longitude</code>). Rows without a recognised location are still saved; geofence will be skipped for them.
       </p>
     </div>
     <div class="panel">
@@ -354,8 +356,7 @@ async function createCustomer() {
     contactPhone: document.getElementById("custPhone").value.trim() || undefined,
     address: document.getElementById("custAddress").value.trim() || undefined,
     city: document.getElementById("custCity").value.trim() || undefined,
-    latitude: parseFloat(document.getElementById("custLat").value) || undefined,
-    longitude: parseFloat(document.getElementById("custLng").value) || undefined,
+    location: document.getElementById("custLocation").value.trim() || undefined,
   };
   const msg = document.getElementById("custMsg");
   if (!body.name) { msg.className = "msg err"; msg.textContent = "Customer name is required."; return; }
@@ -365,7 +366,8 @@ async function createCustomer() {
   });
   const data = await res.json();
   if (!res.ok) { msg.className = "msg err"; msg.textContent = data.error; return; }
-  msg.className = "msg ok"; msg.textContent = "Customer added.";
+  const locNote = data.latitude != null ? ` (location: ${data.latitude.toFixed(5)}, ${data.longitude.toFixed(5)})` : " (no coordinates)";
+  msg.className = "msg ok"; msg.textContent = "Customer added." + locNote;
   loadCustomers();
 }
 
@@ -499,6 +501,8 @@ function handleBulkUpload(event, kind) {
           contactPhone: String(r.contactPhone || r.ContactPhone || "").trim() || undefined,
           address: String(r.address || r.Address || "").trim() || undefined,
           city: String(r.city || r.City || "").trim() || undefined,
+          // Prefer single "location" column (Maps link or "lat, lng"); fall back to separate lat/lng
+          location: String(r.location || r.Location || r.mapsLink || r.MapsLink || "").trim() || undefined,
           latitude: parseFloat(r.latitude || r.Latitude) || undefined,
           longitude: parseFloat(r.longitude || r.Longitude) || undefined,
         }))
@@ -519,10 +523,13 @@ function handleBulkUpload(event, kind) {
     const data = await res.json();
     if (!res.ok) { msgEl.className = "msg err"; msgEl.textContent = data.error || "Upload failed."; return; }
 
+    const warnN = data.warnings?.length || 0;
     msgEl.className = data.errors?.length ? "msg err" : "msg ok";
     msgEl.textContent = `Created ${data.created}, updated ${data.updated}` +
-      (data.errors?.length ? `, ${data.errors.length} row(s) skipped — see console.` : ".");
+      (data.errors?.length ? `, ${data.errors.length} row(s) skipped` : "") +
+      (warnN ? `, ${warnN} location warning(s)` : "") + ".";
     if (data.errors?.length) console.warn("Bulk upload row errors:", data.errors);
+    if (data.warnings?.length) console.warn("Bulk upload location warnings:", data.warnings);
 
     if (kind === "dealers") loadCustomers(); else { loadItems(); loadRates(); }
   };
