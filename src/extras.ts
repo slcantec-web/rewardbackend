@@ -233,6 +233,47 @@ async function syncPayout(env: Env, mobile: string) {
     .run();
 }
 
+/**
+ * Rebuild wallet balances from APPROVED claims minus already PAID payouts,
+ * then create/refresh PENDING payout rows for anyone at/over threshold.
+ * Fixes historical data where claims were approved but wallets/payouts were never written.
+ */
+async function rebuildWalletsFromApprovals(env: Env) {
+  const threshold = parseFloat(env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+
+  // Net balance per mobile = sum(approved rewards) - sum(paid payouts)
+  const { results: rows } = await env.DB.prepare(
+    `SELECT s.mobile_number,
+            COALESCE(SUM(s.total_approved_reward_lkr), 0) AS approved_total,
+            COALESCE((SELECT SUM(p.amount_lkr) FROM payouts p WHERE p.mobile_number = s.mobile_number AND p.status = 'PAID'), 0) AS paid_total
+     FROM submissions s
+     WHERE s.status = 'APPROVED'
+     GROUP BY s.mobile_number`
+  ).all<{ mobile_number: string; approved_total: number; paid_total: number }>();
+
+  let walletsUpserted = 0;
+  let overThreshold = 0;
+
+  for (const r of rows) {
+    const balance = Math.max(0, Number(r.approved_total || 0) - Number(r.paid_total || 0));
+    await env.DB.prepare(
+      `INSERT INTO wallets (mobile_number, balance_lkr, status, updated_at)
+       VALUES (?, ?, 'ACTIVE', datetime('now'))
+       ON CONFLICT(mobile_number) DO UPDATE SET
+         balance_lkr = excluded.balance_lkr,
+         updated_at = datetime('now')`
+    )
+      .bind(r.mobile_number, balance)
+      .run();
+    walletsUpserted++;
+    if (balance >= threshold) overThreshold++;
+  }
+
+  await syncAllPayouts(env);
+
+  return { walletsUpserted, overThreshold, threshold, mobilesFromApprovals: rows.length };
+}
+
 /** Creates missing payouts for every wallet at/over threshold and refreshes pending amounts. */
 async function syncAllPayouts(env: Env) {
   const threshold = parseFloat(env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
@@ -521,9 +562,15 @@ export function registerExtras(app: App) {
 
     const status = (c.req.query("status") || "PENDING").toUpperCase();
     const threshold = parseFloat(c.env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+    const doRebuild = c.req.query("rebuild") === "1";
 
-    // Always rebuild missing pending payouts from wallets already at/over threshold
-    if (status === "PENDING" || status === "ALL") await syncAllPayouts(c.env);
+    let rebuildStats: any = null;
+    if (doRebuild) {
+      // Force: recompute wallets from approved claims, then create payout rows
+      rebuildStats = await rebuildWalletsFromApprovals(c.env);
+    } else if (status === "PENDING" || status === "ALL") {
+      await syncAllPayouts(c.env);
+    }
 
     const { results } = await c.env.DB.prepare(
       `SELECT p.id, p.mobile_number, p.amount_lkr, p.status, p.erp_reference, p.bank_reference, p.bound_by, p.bound_at, p.created_at,
@@ -539,7 +586,6 @@ export function registerExtras(app: App) {
       .bind(status, status)
       .all();
 
-    // Diagnostic: every wallet at/over threshold (explains empty list)
     const { results: eligible } = await c.env.DB.prepare(
       `SELECT w.mobile_number, w.balance_lkr, w.status AS wallet_status,
               (SELECT COUNT(*) FROM payouts p WHERE p.mobile_number = w.mobile_number AND p.status = 'PENDING') AS pending_payouts,
@@ -552,19 +598,53 @@ export function registerExtras(app: App) {
       .bind(threshold)
       .all();
 
+    // Always show top approved totals so lead can see why list is empty
+    const { results: topApproved } = await c.env.DB.prepare(
+      `SELECT mobile_number,
+              COALESCE(SUM(total_approved_reward_lkr), 0) AS approved_total,
+              COUNT(*) AS approved_claims
+       FROM submissions
+       WHERE status = 'APPROVED'
+       GROUP BY mobile_number
+       ORDER BY approved_total DESC
+       LIMIT 30`
+    ).all();
+
+    const walletCount = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM wallets`).first<{ n: number }>();
+    const walletOver = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM wallets WHERE balance_lkr >= ?`).bind(threshold).first<{ n: number }>();
+
     return c.json({
       payouts: results,
       eligible,
+      topApproved,
+      stats: {
+        wallets: walletCount?.n ?? 0,
+        walletsOverThreshold: walletOver?.n ?? 0,
+        pendingPayouts: results.filter((p: any) => p.status === "PENDING").length,
+      },
+      rebuildStats,
       threshold,
-      apiVersion: "2026-09-24-payout-sync",
+      apiVersion: "2026-09-24c-rebuild",
       synced: true,
     });
   });
 
+  app.post("/api/finance-lead/payouts/rebuild", async (c) => {
+    const session = await financeSession(c, ["finance_lead"]);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    const stats = await rebuildWalletsFromApprovals(c.env);
+    await c.env.DB.prepare(
+      `INSERT INTO finance_audit_trail (actor, submission_id, action, details_json) VALUES (?,?,?,?)`
+    )
+      .bind(session.sub, null, "REBUILD_WALLETS_PAYOUTS", JSON.stringify(stats))
+      .run();
+    return c.json({ ok: true, ...stats, apiVersion: "2026-09-24c-rebuild" });
+  });
+
   app.get("/api/version", async (c) => {
     return c.json({
-      apiVersion: "2026-09-24-payout-sync",
-      features: ["device-insights", "payout-sync", "location-parse", "customer-profile", "bank-prefill"],
+      apiVersion: "2026-09-24c-rebuild",
+      features: ["device-insights", "payout-sync", "wallet-rebuild", "location-parse", "customer-profile", "bank-prefill"],
     });
   });
 

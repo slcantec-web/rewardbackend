@@ -81,7 +81,7 @@
 
 <div class="layout" style="display:none;flex-direction:column;" id="mainLayout">
   <div class="app-header">
-    <h2>💰 Finance Dashboard <span style="font-size:0.7rem;opacity:0.75;font-weight:500;">v2026-09-24b</span></h2>
+    <h2>💰 Finance Dashboard <span style="font-size:0.7rem;opacity:0.75;font-weight:500;">v2026-09-24c</span></h2>
     <nav>
       <a href="#" id="navQueue" class="active">Review Queue</a>
       <a href="#" id="navPayouts" style="display:none;">Payouts</a>
@@ -413,8 +413,9 @@ async function rejectSubmission() {
 }
 
 // ---------- Payouts (Finance Lead) ----------
-async function loadPayouts() {
-  const res = await fetch(`${API_BASE}/api/finance-lead/payouts?status=PENDING`, { headers: authHeaders() });
+async function loadPayouts(rebuild) {
+  const q = rebuild ? "?status=PENDING&rebuild=1" : "?status=PENDING";
+  const res = await fetch(`${API_BASE}/api/finance-lead/payouts${q}`, { headers: authHeaders() });
   if (res.status === 401) {
     document.getElementById("reviewPanel").innerHTML = `<div class="panel" style="border:2px solid var(--danger);">
       <h3>Payouts require Finance Lead role</h3>
@@ -429,36 +430,61 @@ async function loadPayouts() {
   }
   lastPayouts = data.payouts || [];
   const eligible = data.eligible || [];
+  const topApproved = data.topApproved || [];
+  const stats = data.stats || {};
   const threshold = data.threshold || 1000;
   const apiVer = data.apiVersion || "(old API — redeploy Worker)";
   const list = document.getElementById("queueList");
   list.innerHTML = `
     <div style="padding:14px 16px;">
       <div style="font-weight:600;margin-bottom:4px;">Pending Payouts (${lastPayouts.length})</div>
-      <div class="muted" style="margin-bottom:6px;">Threshold: LKR ${threshold}</div>
-      <div class="muted" style="margin-bottom:8px;font-size:0.75rem;">API: ${apiVer}</div>
-      <button class="btn btn-secondary" style="width:100%;padding:8px;" onclick="loadPayouts()">↻ Sync &amp; refresh</button>
+      <div class="muted" style="margin-bottom:4px;">Threshold: LKR ${threshold}</div>
+      <div class="muted" style="margin-bottom:4px;font-size:0.75rem;">API: ${apiVer}</div>
+      <div class="muted" style="margin-bottom:8px;font-size:0.75rem;">Wallets: ${stats.wallets ?? "?"} · ≥ threshold: ${stats.walletsOverThreshold ?? "?"}</div>
+      <button class="btn btn-secondary" style="width:100%;padding:8px;" onclick="loadPayouts(false)">↻ Refresh</button>
+      <button class="btn btn-approve" style="width:100%;padding:8px;margin-top:6px;" onclick="rebuildPayouts()">⚡ Rebuild from approved claims</button>
       <button class="btn btn-secondary" style="width:100%;padding:8px;margin-top:6px;" onclick="exportPayoutsCsv()">Download CSV</button>
     </div>
   `;
 
+  let rebuildNote = "";
+  if (data.rebuildStats) {
+    const r = data.rebuildStats;
+    rebuildNote = `<div class="panel" style="border:2px solid #1a6b3c;background:#eef7f0;">
+      <h3>Rebuild complete</h3>
+      <p>Mobiles with approvals: <b>${r.mobilesFromApprovals}</b> · Wallets updated: <b>${r.walletsUpserted}</b> · Over threshold: <b>${r.overThreshold}</b></p>
+    </div>`;
+  }
+
   const eligibleHtml = eligible.length
     ? `<div class="panel" style="border:2px solid #1a6b3c;">
         <h3>Wallets ≥ LKR ${threshold} (${eligible.length})</h3>
-        <p class="muted">These balances are at/over threshold. Opening this tab creates pending payout rows automatically.</p>
         ${eligible.map(e => `
           <div class="metric-row">
             <span>${e.mobile_number} <span class="muted">(${e.wallet_status})</span></span>
             <span><b>LKR ${Number(e.balance_lkr).toFixed(2)}</b>
-              ${e.pending_payouts ? " · pending payout ✓" : " · no payout row yet"}
-              ${e.has_bank ? " · bank ✓" : " · <span style=\"color:var(--danger)\">no bank</span>"}
+              ${Number(e.pending_payouts) > 0 ? " · pending ✓" : " · no payout row"}
+              ${Number(e.has_bank) > 0 ? " · bank ✓" : ' · <span style="color:var(--danger)">no bank</span>'}
             </span>
           </div>`).join("")}
       </div>`
-    : `<div class="panel"><h3>No wallets ≥ LKR ${threshold}</h3>
-        <p class="muted">Payouts only appear after claims are <b>Approved</b> and the customer wallet balance reaches the threshold.
-        Having many customers in Customer Master is not enough — they need approved claim rewards in the wallet.</p>
-        <p class="muted">API version: <code>${apiVer}</code> — if this does not say <code>2026-09-24-payout-sync</code>, the Worker is still running old code.</p>
+    : "";
+
+  const topHtml = topApproved.length
+    ? `<div class="panel">
+        <h3>Top approved claim totals (source of truth)</h3>
+        <p class="muted">If these are ≥ ${threshold} but payouts are empty, click <b>Rebuild from approved claims</b>.</p>
+        ${topApproved.map(t => `
+          <div class="metric-row">
+            <span>${t.mobile_number} · ${t.approved_claims} claims</span>
+            <span><b>LKR ${Number(t.approved_total).toFixed(2)}</b>
+              ${Number(t.approved_total) >= threshold ? ' · <span style="color:#166534">eligible</span>' : ""}
+            </span>
+          </div>`).join("")}
+      </div>`
+    : `<div class="panel"><h3>No approved claims found</h3>
+        <p class="muted">Payouts only appear after Finance <b>Approves</b> claims. Customer Master count does not create wallet balance.</p>
+        <p class="muted">API: <code>${apiVer}</code></p>
       </div>`;
 
   const payoutsHtml = lastPayouts.length
@@ -467,7 +493,7 @@ async function loadPayouts() {
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
               <div style="font-weight:700;">${p.mobile_number}</div>
-              <div class="muted" style="font-size:0.85rem;">Requested ${new Date(p.created_at).toLocaleString()} · ${p.approved_claims || 0} approved claims
+              <div class="muted" style="font-size:0.85rem;">${new Date(p.created_at).toLocaleString()} · ${p.approved_claims || 0} approved claims
                 ${p.wallet_balance != null ? " · wallet LKR " + Number(p.wallet_balance).toFixed(2) : ""}</div>
             </div>
             <div style="font-size:1.3rem;font-weight:700;">LKR ${Number(p.amount_lkr).toFixed(2)}</div>
@@ -486,9 +512,14 @@ async function loadPayouts() {
           </div>
         </div>
       `).join("")
-    : `<div class="panel">No pending payout rows yet. See eligible wallets above.</div>`;
+    : `<div class="panel">No pending payout rows yet. Use <b>Rebuild from approved claims</b> if top totals above are ≥ threshold.</div>`;
 
-  document.getElementById("reviewPanel").innerHTML = eligibleHtml + payoutsHtml;
+  document.getElementById("reviewPanel").innerHTML = rebuildNote + eligibleHtml + topHtml + payoutsHtml;
+}
+
+async function rebuildPayouts() {
+  if (!confirm("Rebuild all wallets from approved claims and create missing payout rows for balances ≥ threshold?")) return;
+  await loadPayouts(true);
 }
 
 function csvEscape(v) {
