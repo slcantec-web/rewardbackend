@@ -3,15 +3,10 @@ import { cors } from "hono/cors";
 import type { Env, CreateSubmissionPayload } from "./types";
 import { evaluateFraud, perceptualHashFromBytes, deviceFingerprintHash } from "./fraud";
 import { signSession, verifySession, requireRole, type SessionPayload } from "./auth";
-import { registerExtras } from "./extras";
 
 const app = new Hono<{ Bindings: Env }>();
 
 app.use("*", cors());
-
-// Enhanced routes FIRST so they win over base routes with the same path
-// (device insights, payout sync, location parsing, richer finance APIs).
-registerExtras(app);
 
 // ============================================================
 // Helpers
