@@ -3,10 +3,15 @@ import { cors } from "hono/cors";
 import type { Env, CreateSubmissionPayload } from "./types";
 import { evaluateFraud, perceptualHashFromBytes, deviceFingerprintHash } from "./fraud";
 import { signSession, verifySession, requireRole, type SessionPayload } from "./auth";
+import { registerExtras } from "./extras";
 
 const app = new Hono<{ Bindings: Env }>();
 
 app.use("*", cors());
+
+// Enhanced routes FIRST so they win over base routes with the same path
+// (device insights, payout sync, location parsing, richer finance APIs).
+registerExtras(app);
 
 // ============================================================
 // Helpers
@@ -1122,11 +1127,5 @@ app.post("/api/admin/qr-assets", async (c) => {
   // in a follow-up pass once the library is confirmed to work in your Workers runtime.
   return c.json({ ok: true, assetId: result.meta.last_row_id });
 });
-
-// Wire enhanced routes (device insights, payout sync, location parsing, richer finance APIs).
-// Hono keeps the first matching handler, so extras must register *before* export and
-// after the base routes they intentionally override.
-import { registerExtras } from "./extras";
-registerExtras(app);
 
 export default app;
