@@ -624,7 +624,7 @@ export function registerExtras(app: App) {
       },
       rebuildStats,
       threshold,
-      apiVersion: "2026-09-24c-rebuild",
+      apiVersion: "2026-09-24d-customers",
       synced: true,
     });
   });
@@ -638,12 +638,125 @@ export function registerExtras(app: App) {
     )
       .bind(session.sub, null, "REBUILD_WALLETS_PAYOUTS", JSON.stringify(stats))
       .run();
-    return c.json({ ok: true, ...stats, apiVersion: "2026-09-24c-rebuild" });
+    return c.json({ ok: true, ...stats, apiVersion: "2026-09-24d-customers" });
+  });
+
+
+  // ---------- Customer summaries (mobile-based rollup for Finance) ----------
+  app.get("/api/finance/customer-summaries", async (c) => {
+    if (!(await financeSession(c, ["finance_staff", "finance_lead"]))) return c.json({ error: "Unauthorized" }, 401);
+
+    const threshold = parseFloat(c.env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+    const q = (c.req.query("q") || "").trim();
+    const sort = (c.req.query("sort") || "approved").toLowerCase();
+    const limit = Math.min(500, Math.max(20, parseInt(c.req.query("limit") || "100", 10) || 100));
+
+    // Core rollup per mobile
+    let sql = `
+      SELECT s.mobile_number,
+             COUNT(*) AS total_submissions,
+             COALESCE(SUM(s.status = 'APPROVED'), 0) AS approved_count,
+             COALESCE(SUM(s.status = 'REJECTED'), 0) AS rejected_count,
+             COALESCE(SUM(s.status IN ('PENDING','IN_REVIEW')), 0) AS pending_count,
+             COALESCE(SUM(CASE WHEN s.status = 'APPROVED' THEN s.total_approved_reward_lkr ELSE 0 END), 0) AS approved_lkr,
+             COALESCE(SUM(CASE WHEN s.status IN ('PENDING','IN_REVIEW') THEN s.total_claimed_reward_lkr ELSE 0 END), 0) AS pending_lkr,
+             COALESCE(SUM(CASE WHEN s.status = 'REJECTED' THEN s.total_claimed_reward_lkr ELSE 0 END), 0) AS rejected_lkr,
+             COALESCE(SUM(s.total_claimed_reward_lkr), 0) AS claimed_lkr,
+             COALESCE(MAX(s.risk_score), 0) AS max_risk,
+             COALESCE(SUM(CASE WHEN s.risk_score >= 60 THEN 1 ELSE 0 END), 0) AS high_risk_count,
+             COALESCE(SUM(CASE WHEN s.fraud_flags IS NOT NULL AND s.fraud_flags != '' THEN 1 ELSE 0 END), 0) AS flagged_count,
+             COALESCE(SUM(CASE WHEN s.fraud_flags LIKE '%GEOGRAPHIC_MISMATCH%' THEN 1 ELSE 0 END), 0) AS geo_mismatch_count,
+             COALESCE(SUM(CASE WHEN s.fraud_flags LIKE '%DUPLICATE%' THEN 1 ELSE 0 END), 0) AS duplicate_count,
+             COALESCE(SUM(CASE WHEN s.fraud_flags LIKE '%HIGH_VELOCITY%' THEN 1 ELSE 0 END), 0) AS velocity_count,
+             COUNT(DISTINCT s.device_fingerprint_hash) AS device_count,
+             COUNT(DISTINCT s.dealer_id) AS dealer_count,
+             MIN(s.created_at_server) AS first_seen,
+             MAX(s.created_at_server) AS last_seen
+      FROM submissions s
+    `;
+    const binds: any[] = [];
+    if (q) {
+      sql += ` WHERE s.mobile_number LIKE ? `;
+      binds.push(`%${q}%`);
+    }
+    sql += ` GROUP BY s.mobile_number `;
+
+    const orderMap: Record<string, string> = {
+      approved: "approved_lkr DESC",
+      pending: "pending_lkr DESC",
+      risk: "max_risk DESC",
+      submissions: "total_submissions DESC",
+      recent: "last_seen DESC",
+    };
+    sql += ` ORDER BY ${orderMap[sort] || orderMap.approved} LIMIT ? `;
+    binds.push(limit);
+
+    const { results } = await c.env.DB.prepare(sql).bind(...binds).all<any>();
+
+    // Attach wallet + bank + paid
+    const customers = [];
+    for (const r of results) {
+      const wallet = await c.env.DB.prepare(`SELECT balance_lkr, status FROM wallets WHERE mobile_number = ?`)
+        .bind(r.mobile_number)
+        .first<any>();
+      const paid = await c.env.DB.prepare(
+        `SELECT COUNT(*) AS n, COALESCE(SUM(amount_lkr), 0) AS total FROM payouts WHERE mobile_number = ? AND status = 'PAID'`
+      )
+        .bind(r.mobile_number)
+        .first<any>();
+      const pendingPay = await c.env.DB.prepare(
+        `SELECT COUNT(*) AS n, COALESCE(SUM(amount_lkr), 0) AS total FROM payouts WHERE mobile_number = ? AND status = 'PENDING'`
+      )
+        .bind(r.mobile_number)
+        .first<any>();
+      const bank = await c.env.DB.prepare(
+        `SELECT account_name, bank_name FROM customer_bank_details WHERE mobile_number = ?`
+      )
+        .bind(r.mobile_number)
+        .first<any>();
+
+      const approved = Number(r.approved_lkr || 0);
+      const walletBal = wallet ? Number(wallet.balance_lkr || 0) : 0;
+      const paidTotal = Number(paid?.total || 0);
+      const net = Math.max(0, approved - paidTotal);
+
+      customers.push({
+        ...r,
+        wallet_balance: walletBal,
+        wallet_status: wallet?.status || "NONE",
+        paid_lkr: paidTotal,
+        paid_count: paid?.n || 0,
+        pending_payout_lkr: Number(pendingPay?.total || 0),
+        pending_payout_count: pendingPay?.n || 0,
+        has_bank: !!bank,
+        bank_name: bank?.bank_name || null,
+        account_name: bank?.account_name || null,
+        net_payable: net,
+        payout_eligible: net >= threshold,
+        suspect: Number(r.high_risk_count) > 0 || Number(r.flagged_count) > 0 || Number(r.device_count) > 2,
+      });
+    }
+
+    const totals = {
+      customers: customers.length,
+      approved_lkr: customers.reduce((a, x) => a + Number(x.approved_lkr || 0), 0),
+      pending_lkr: customers.reduce((a, x) => a + Number(x.pending_lkr || 0), 0),
+      eligible: customers.filter((x) => x.payout_eligible).length,
+      suspects: customers.filter((x) => x.suspect).length,
+      with_pending_payout: customers.filter((x) => x.pending_payout_count > 0).length,
+    };
+
+    return c.json({
+      customers,
+      totals,
+      threshold,
+      apiVersion: "2026-09-24d-customers",
+    });
   });
 
   app.get("/api/version", async (c) => {
     return c.json({
-      apiVersion: "2026-09-24c-rebuild",
+      apiVersion: "2026-09-24d-customers",
       features: ["device-insights", "payout-sync", "wallet-rebuild", "location-parse", "customer-profile", "bank-prefill"],
     });
   });

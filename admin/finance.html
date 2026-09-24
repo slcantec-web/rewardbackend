@@ -81,9 +81,10 @@
 
 <div class="layout" style="display:none;flex-direction:column;" id="mainLayout">
   <div class="app-header">
-    <h2>💰 Finance Dashboard <span style="font-size:0.7rem;opacity:0.75;font-weight:500;">v2026-09-24c</span></h2>
+    <h2>💰 Finance Dashboard <span style="font-size:0.7rem;opacity:0.75;font-weight:500;">v2026-09-24d</span></h2>
     <nav>
       <a href="#" id="navQueue" class="active">Review Queue</a>
+      <a href="#" id="navCustomers">Customers</a>
       <a href="#" id="navPayouts" style="display:none;">Payouts</a>
       <a href="/index.html">Admin Panel →</a>
     </nav>
@@ -147,6 +148,7 @@ function showApp() {
     document.getElementById("navPayouts").style.display = "inline";
   }
   document.getElementById("navQueue").addEventListener("click", (e) => { e.preventDefault(); showQueueView(); });
+  document.getElementById("navCustomers").addEventListener("click", (e) => { e.preventDefault(); showCustomersView(); });
   document.getElementById("navPayouts").addEventListener("click", (e) => { e.preventDefault(); showPayoutsView(); });
 
   loadTopCustomers();
@@ -182,11 +184,176 @@ function showQueueView() {
   loadQueue();
 }
 
+
+function showCustomersView() {
+  setActiveNav("navCustomers");
+  document.getElementById("queueSidebar").style.display = "none";
+  loadCustomerSummaries();
+}
+
 function showPayoutsView() {
   setActiveNav("navPayouts");
   document.getElementById("queueSidebar").style.display = "block";
   loadPayouts();
 }
+
+let lastCustomerSummaries = [];
+
+async function loadCustomerSummaries() {
+  const sort = document.getElementById("custSort")?.value || "approved";
+  const q = document.getElementById("custSearch")?.value?.trim() || "";
+  const params = new URLSearchParams({ sort, limit: "200" });
+  if (q) params.set("q", q);
+
+  document.getElementById("reviewPanel").innerHTML = `<div class="panel">Loading customer summaries…</div>`;
+
+  const res = await fetch(`${API_BASE}/api/finance/customer-summaries?${params}`, { headers: authHeaders() });
+  if (res.status === 401) { localStorage.removeItem("financeToken"); location.reload(); return; }
+  const data = await res.json();
+  if (!res.ok) {
+    document.getElementById("reviewPanel").innerHTML = `<div class="panel"><b>Error:</b> ${data.error || res.status}</div>`;
+    return;
+  }
+
+  lastCustomerSummaries = data.customers || [];
+  const t = data.totals || {};
+  const threshold = data.threshold || 1000;
+
+  const rows = lastCustomerSummaries.map(c => {
+    const riskCls = c.max_risk >= 60 ? "risk-high" : c.max_risk >= 25 ? "risk-med" : "risk-low";
+    const flags = [];
+    if (c.geo_mismatch_count) flags.push(`Geo×${c.geo_mismatch_count}`);
+    if (c.duplicate_count) flags.push(`Dup×${c.duplicate_count}`);
+    if (c.velocity_count) flags.push(`Vel×${c.velocity_count}`);
+    if (c.high_risk_count) flags.push(`HiRisk×${c.high_risk_count}`);
+    if (c.device_count > 2) flags.push(`${c.device_count} devices`);
+    return `
+      <tr style="${c.suspect ? 'background:#fff1f2;' : c.payout_eligible ? 'background:#f0fdf4;' : ''}">
+        <td>
+          <b style="cursor:pointer;color:var(--primary);" onclick="openCustomerDetail('${c.mobile_number}')">${c.mobile_number}</b>
+          ${c.suspect ? '<span class="device-badge device-shared">SUSPECT</span>' : ''}
+          ${c.payout_eligible ? '<span class="device-badge" style="background:#dcfce7;color:#166534;">PAYOUT ≥'+threshold+'</span>' : ''}
+        </td>
+        <td>${c.total_submissions}<div class="muted" style="font-size:0.7rem;">A${c.approved_count}/R${c.rejected_count}/P${c.pending_count}</div></td>
+        <td><b>${Number(c.approved_lkr).toFixed(0)}</b></td>
+        <td>${Number(c.pending_lkr).toFixed(0)}</td>
+        <td>${Number(c.wallet_balance).toFixed(0)}<div class="muted" style="font-size:0.7rem;">${c.wallet_status}</div></td>
+        <td>${Number(c.net_payable).toFixed(0)}
+          <div class="muted" style="font-size:0.7rem;">paid ${Number(c.paid_lkr).toFixed(0)} · pend-pay ${Number(c.pending_payout_lkr).toFixed(0)}</div>
+        </td>
+        <td><span class="risk-badge ${riskCls}">${c.max_risk}</span>
+          <div class="muted" style="font-size:0.7rem;">${flags.join(" · ") || "—"}</div>
+        </td>
+        <td class="muted" style="font-size:0.75rem;">${c.dealer_count} dealers · ${c.device_count} devices
+          <div>${c.has_bank ? "bank ✓" : "no bank"}</div>
+        </td>
+      </tr>`;
+  }).join("");
+
+  document.getElementById("reviewPanel").innerHTML = `
+    <div class="panel" style="border:2px solid #1a6b3c;">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+        <div>
+          <h3 style="margin:0;">Customer summary (by mobile)</h3>
+          <div class="muted" style="margin-top:4px;">API ${data.apiVersion || "?"} · Threshold LKR ${threshold}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="custSearch" placeholder="Search mobile…" value="${q.replace(/"/g,'&quot;')}" style="padding:8px;border:1px solid var(--border);border-radius:8px;width:140px;" />
+          <select id="custSort" style="padding:8px;border-radius:8px;border:1px solid var(--border);">
+            <option value="approved" ${sort==='approved'?'selected':''}>Sort: Approved LKR</option>
+            <option value="pending" ${sort==='pending'?'selected':''}>Sort: Pending LKR</option>
+            <option value="risk" ${sort==='risk'?'selected':''}>Sort: Risk</option>
+            <option value="submissions" ${sort==='submissions'?'selected':''}>Sort: Submissions</option>
+            <option value="recent" ${sort==='recent'?'selected':''}>Sort: Recent</option>
+          </select>
+          <button class="btn btn-secondary" style="width:auto;padding:8px 14px;" onclick="loadCustomerSummaries()">Search</button>
+          <button class="btn btn-secondary" style="width:auto;padding:8px 14px;" onclick="exportCustomersCsv()">CSV</button>
+        </div>
+      </div>
+      <div class="cust-grid" style="margin-top:14px;">
+        <div><div class="label">Customers</div><div><b>${t.customers ?? 0}</b></div></div>
+        <div><div class="label">Approved LKR</div><div><b>${Number(t.approved_lkr||0).toFixed(0)}</b></div></div>
+        <div><div class="label">Pending claim LKR</div><div><b>${Number(t.pending_lkr||0).toFixed(0)}</b></div></div>
+        <div><div class="label">Payout-eligible (≥${threshold})</div><div><b>${t.eligible ?? 0}</b></div></div>
+        <div><div class="label">Suspects</div><div><b style="color:var(--danger);">${t.suspects ?? 0}</b></div></div>
+        <div><div class="label">With pending payout row</div><div><b>${t.with_pending_payout ?? 0}</b></div></div>
+      </div>
+    </div>
+    <div class="panel" style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+        <thead>
+          <tr style="text-align:left;border-bottom:2px solid var(--border);">
+            <th style="padding:8px 6px;">Mobile / Customer ID</th>
+            <th>Subs</th>
+            <th>Approved LKR</th>
+            <th>Pending LKR</th>
+            <th>Wallet</th>
+            <th>Net payable</th>
+            <th>Risk / flags</th>
+            <th>Dealers · devices</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows || '<tr><td colspan="8" class="muted" style="padding:16px;">No submissions found.</td></tr>'}
+        </tbody>
+      </table>
+      <p class="muted" style="margin-top:10px;">Green row = net payable ≥ threshold (should appear in Payouts after Rebuild). Pink row = suspect (high risk / flags / many devices). Click mobile to open profile.</p>
+    </div>
+  `;
+  document.getElementById("custSearch")?.addEventListener("keydown", (e) => { if (e.key === "Enter") loadCustomerSummaries(); });
+}
+
+async function openCustomerDetail(mobile) {
+  const res = await fetch(`${API_BASE}/api/finance/customers/${encodeURIComponent(mobile)}`, { headers: authHeaders() });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || "Not found"); return; }
+  const c = data.customer || {};
+  const stats = c.stats || {};
+  const wallet = c.wallet || {};
+  const bank = c.bank;
+  const recent = (c.recent || []).map(r =>
+    `<div class="metric-row"><span>${r.id}</span><span>${r.status} · claim ${Number(r.total_claimed_reward_lkr||0).toFixed(0)} · appr ${Number(r.total_approved_reward_lkr||0).toFixed(0)} · risk ${r.risk_score}</span></div>`
+  ).join("") || "—";
+  const devices = (c.devices || []).map(d =>
+    `<div class="metric-row"><span>${d.label || (d.hash||"").slice(0,12)}</span><span>${d.claims} claims</span></div>`
+  ).join("") || "—";
+  const dealers = (c.dealers || []).map(d =>
+    `<div class="metric-row"><span>${d.name}${d.city ? " · "+d.city : ""}</span><span>${d.claims} claims</span></div>`
+  ).join("") || "—";
+
+  document.getElementById("reviewPanel").innerHTML = `
+    <div class="panel">
+      <button class="btn btn-secondary" style="width:auto;padding:8px 12px;margin-bottom:12px;" onclick="loadCustomerSummaries()">← Back to customers</button>
+      <h3>Customer ${mobile}</h3>
+      <div class="cust-grid">
+        <div><div class="label">Total claims</div><div><b>${stats.total ?? 0}</b></div></div>
+        <div><div class="label">Approved / Rejected / Pending</div><div>${stats.approved ?? 0} / ${stats.rejected ?? 0} / ${stats.pending ?? 0}</div></div>
+        <div><div class="label">Approved LKR</div><div><b>${Number(stats.approved_lkr||0).toFixed(2)}</b></div></div>
+        <div><div class="label">Pending claim LKR</div><div>${Number(stats.pending_lkr||0).toFixed(2)}</div></div>
+        <div><div class="label">Wallet</div><div><b>${Number(wallet.balance_lkr||0).toFixed(2)}</b> (${wallet.status||"NONE"})</div></div>
+        <div><div class="label">Paid out</div><div>${c.paidOut ? "LKR "+Number(c.paidOut.total||0).toFixed(2)+" ("+c.paidOut.n+" txns)" : "—"}</div></div>
+        <div><div class="label">Max risk</div><div>${stats.max_risk ?? 0}</div></div>
+        <div><div class="label">First → last</div><div class="muted">${stats.first_claim ? new Date(stats.first_claim).toLocaleDateString() : "—"} → ${stats.last_claim ? new Date(stats.last_claim).toLocaleDateString() : "—"}</div></div>
+      </div>
+      ${bank ? `<div style="margin-top:10px;"><b>Bank:</b> ${bank.account_name} · ${bank.bank_name}${bank.branch_name?" ("+bank.branch_name+")":""} · ${bank.account_number}</div>` : '<div class="muted" style="margin-top:10px;">No bank details on file.</div>'}
+    </div>
+    <div class="review-grid">
+      <div class="panel"><h3>Recent submissions</h3>${recent}</div>
+      <div>
+        <div class="panel"><h3>Devices</h3>${devices}</div>
+        <div class="panel"><h3>Dealers</h3>${dealers}</div>
+      </div>
+    </div>
+  `;
+}
+
+function exportCustomersCsv() {
+  const header = ["mobile_number","total_submissions","approved_count","rejected_count","pending_count","approved_lkr","pending_lkr","wallet_balance","wallet_status","net_payable","paid_lkr","pending_payout_lkr","max_risk","flagged_count","geo_mismatch_count","duplicate_count","velocity_count","device_count","dealer_count","has_bank","payout_eligible","suspect"];
+  const rows = [header, ...lastCustomerSummaries.map(c => header.map(k => c[k] ?? ""))];
+  downloadCsv(`customers-${new Date().toISOString().slice(0,10)}.csv`, rows);
+}
+
+
 
 function authHeaders() {
   return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
