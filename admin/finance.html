@@ -39,6 +39,22 @@
   #loginBox input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; }
   #loginBox button { width: 100%; padding: 10px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; }
   select#rejectionCode { width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border); }
+  .app-header {
+    background: var(--primary); color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 14px;
+  }
+  .app-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+  .app-header nav { display: flex; gap: 14px; margin-left: 20px; }
+  .app-header nav a { color: #fff; opacity: 0.85; text-decoration: none; font-size: 0.9rem; }
+  .app-header nav a.active { opacity: 1; font-weight: 700; border-bottom: 2px solid #fff; }
+  .app-header .spacer { flex: 1; }
+  .app-header .who { font-size: 0.85rem; opacity: 0.9; margin-right: 10px; }
+  .app-header button.logout { background: rgba(255,255,255,0.15); color: #fff; border: none; padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+  .top-customers-panel { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .top-customers-panel h4 { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; }
+  .top-customer-row { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 4px 0; }
+  .payout-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .payout-card .bank-info { background: #f9fafb; border-radius: 8px; padding: 10px; margin: 10px 0; font-size: 0.9rem; }
+  .payout-card input { padding: 9px; border: 1px solid var(--border); border-radius: 8px; margin-right: 8px; margin-bottom: 8px; width: 220px; }
 </style>
 </head>
 <body>
@@ -53,10 +69,26 @@
   </div>
 </div>
 
-<div class="layout" style="display:none;" id="mainLayout">
-  <div class="sidebar" id="queueList"></div>
-  <div class="main" id="reviewPanel">
-    <div class="panel">Select a submission from the queue to begin review.</div>
+<div class="layout" style="display:none;flex-direction:column;" id="mainLayout">
+  <div class="app-header">
+    <h2>💰 Finance Dashboard</h2>
+    <nav>
+      <a href="#" id="navQueue" class="active">Review Queue</a>
+      <a href="#" id="navPayouts" style="display:none;">Payouts</a>
+      <a href="/index.html">Admin Panel →</a>
+    </nav>
+    <div class="spacer"></div>
+    <span class="who" id="whoLabel"></span>
+    <button class="logout" id="logoutBtn">Log out</button>
+  </div>
+  <div style="display:flex;flex:1;min-height:0;">
+    <div class="sidebar" id="queueSidebar">
+      <div class="top-customers-panel" id="topCustomersPanel"></div>
+      <div id="queueList"></div>
+    </div>
+    <div class="main" id="reviewPanel">
+      <div class="panel">Select a submission from the queue to begin review.</div>
+    </div>
   </div>
 </div>
 
@@ -64,6 +96,7 @@
 <script>
 const API_BASE = window.API_BASE || "";
 let token = localStorage.getItem("financeToken") || null;
+let role = localStorage.getItem("financeRole") || null;
 let currentId = null;
 
 // ---- Login ----
@@ -76,19 +109,78 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
   });
   const data = await res.json();
   if (!res.ok) { document.getElementById("loginError").textContent = data.error; return; }
+  if (data.role !== "finance_staff" && data.role !== "finance_lead") {
+    document.getElementById("loginError").textContent = "This account does not have Finance access.";
+    return;
+  }
   token = data.token;
+  role = data.role;
   localStorage.setItem("financeToken", token);
+  localStorage.setItem("financeRole", role);
+  localStorage.setItem("financeUsername", username);
   showApp();
+});
+
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  localStorage.removeItem("financeToken");
+  localStorage.removeItem("financeRole");
+  localStorage.removeItem("financeUsername");
+  location.reload();
 });
 
 function showApp() {
   document.getElementById("loginOverlay").style.display = "none";
   document.getElementById("mainLayout").style.display = "flex";
+  document.getElementById("whoLabel").textContent = `${localStorage.getItem("financeUsername") || ""} (${role.replace("_", " ")})`;
+
+  if (role === "finance_lead") {
+    document.getElementById("navPayouts").style.display = "inline";
+  }
+  document.getElementById("navQueue").addEventListener("click", (e) => { e.preventDefault(); showQueueView(); });
+  document.getElementById("navPayouts").addEventListener("click", (e) => { e.preventDefault(); showPayoutsView(); });
+
+  loadTopCustomers();
   loadQueue();
+}
+
+function setActiveNav(id) {
+  document.querySelectorAll(".app-header nav a").forEach(a => a.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+function showQueueView() {
+  setActiveNav("navQueue");
+  document.getElementById("queueSidebar").style.display = "block";
+  loadQueue();
+}
+
+function showPayoutsView() {
+  setActiveNav("navPayouts");
+  document.getElementById("queueSidebar").style.display = "block";
+  loadPayouts();
 }
 
 function authHeaders() {
   return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
+// ============================================================
+// Top Customers (sidebar widget)
+// ============================================================
+async function loadTopCustomers() {
+  const res = await fetch(`${API_BASE}/api/top-customers?limit=5`, { headers: authHeaders() });
+  if (!res.ok) return;
+  const data = await res.json();
+  const panel = document.getElementById("topCustomersPanel");
+  panel.innerHTML = `
+    <h4>Top Submitted Customers</h4>
+    ${(data.customers || []).map(cust => `
+      <div class="top-customer-row">
+        <span>${cust.dealer_name || cust.mobile_number}</span>
+        <span>${cust.submission_count} claims</span>
+      </div>
+    `).join("") || '<div class="muted">No submissions yet.</div>'}
+  `;
 }
 
 async function loadQueue() {
@@ -237,6 +329,55 @@ async function rejectSubmission() {
   });
   loadQueue();
   document.getElementById("reviewPanel").innerHTML = `<div class="panel">Select a submission from the queue to begin review.</div>`;
+}
+
+// ============================================================
+// Finance Lead: Pending Payouts
+// ============================================================
+async function loadPayouts() {
+  const res = await fetch(`${API_BASE}/api/finance-lead/payouts`, { headers: authHeaders() });
+  const data = await res.json();
+  const list = document.getElementById("queueList");
+  list.innerHTML = `<div style="padding:14px 16px;font-weight:600;">Pending Payouts (${(data.payouts || []).length})</div>`;
+
+  document.getElementById("reviewPanel").innerHTML = (data.payouts || []).length
+    ? data.payouts.map(p => `
+        <div class="payout-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-weight:700;">${p.mobile_number}</div>
+              <div class="muted" style="font-size:0.85rem;">Requested ${new Date(p.created_at).toLocaleString()}</div>
+            </div>
+            <div style="font-size:1.3rem;font-weight:700;">LKR ${p.amount_lkr.toFixed(2)}</div>
+          </div>
+          <div class="bank-info">
+            ${p.account_name
+              ? `<b>${p.account_name}</b> — ${p.bank_name}${p.branch_name ? " (" + p.branch_name + ")" : ""}<br>${p.account_number}`
+              : `<span style="color:var(--danger);">⚠️ Customer has not submitted bank details yet.</span>`}
+          </div>
+          <div>
+            <input type="text" placeholder="ERP Reference" id="erp-${p.id}" />
+            <input type="text" placeholder="Bank Outgoing Ref" id="bankref-${p.id}" />
+            <button class="btn btn-approve" style="width:auto;padding:9px 16px;" onclick="bindPayout(${p.id})" ${p.account_name ? "" : "disabled"}>
+              Mark Paid
+            </button>
+          </div>
+        </div>
+      `).join("")
+    : `<div class="panel">No pending payouts.</div>`;
+}
+
+async function bindPayout(payoutId) {
+  const erpReference = document.getElementById(`erp-${payoutId}`).value.trim();
+  const bankReference = document.getElementById(`bankref-${payoutId}`).value.trim();
+  if (!erpReference || !bankReference) { alert("Both ERP reference and bank reference are required."); return; }
+
+  const res = await fetch(`${API_BASE}/api/finance-lead/payouts/${payoutId}/bind`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ erpReference, bankReference })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error); return; }
+  loadPayouts();
 }
 
 if (token) showApp();

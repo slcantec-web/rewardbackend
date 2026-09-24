@@ -152,6 +152,18 @@ CREATE TABLE IF NOT EXISTS staff_users (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- ---------- Customer Bank Details (for payout) ----------
+
+CREATE TABLE IF NOT EXISTS customer_bank_details (
+  mobile_number TEXT PRIMARY KEY REFERENCES wallets(mobile_number),
+  account_name TEXT NOT NULL,
+  account_number TEXT NOT NULL,
+  bank_name TEXT NOT NULL,
+  branch_name TEXT,
+  submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ---------- Audit ----------
 
 CREATE TABLE IF NOT EXISTS system_audit_log (

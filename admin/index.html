@@ -33,6 +33,19 @@
   #loginBox button { width: 100%; }
   .msg { font-size: 0.85rem; margin-top: 6px; }
   .msg.err { color: var(--danger); } .msg.ok { color: var(--primary); }
+  .app-header { background: var(--primary); color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 14px; }
+  .app-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+  .app-header nav a { color: #fff; opacity: 0.85; text-decoration: none; font-size: 0.9rem; margin-left: 14px; }
+  .app-header .spacer { flex: 1; }
+  .app-header .who { font-size: 0.85rem; opacity: 0.9; margin-right: 10px; }
+  .app-header button.logout { background: rgba(255,255,255,0.15); color: #fff; border: none; padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .stat-card .num { font-size: 1.6rem; font-weight: 700; }
+  .stat-card .label { color: var(--muted); font-size: 0.8rem; }
+  .qr-preview { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin-top: 14px; }
+  .qr-preview .qr-box { border: 1px solid var(--border); border-radius: 10px; padding: 14px; background: #fff; }
+  .qr-preview .qr-actions { display: flex; flex-direction: column; gap: 8px; }
 </style>
 </head>
 <body>
@@ -48,15 +61,24 @@
 </div>
 
 <div id="app" style="display:none;">
+  <div class="app-header">
+    <h2>🛠️ Admin Panel</h2>
+    <nav><a href="/finance.html">Finance Dashboard →</a></nav>
+    <div class="spacer"></div>
+    <span class="who" id="whoLabel"></span>
+    <button class="logout" id="logoutBtn">Log out</button>
+  </div>
   <div class="tabs">
-    <div class="tab active" data-tab="staff">Staff Accounts</div>
+    <div class="tab active" data-tab="overview">Overview</div>
+    <div class="tab" data-tab="staff">Staff Accounts</div>
     <div class="tab" data-tab="customers">Customer Master</div>
     <div class="tab" data-tab="items">Item Master</div>
     <div class="tab" data-tab="rates">Payout Rates</div>
     <div class="tab" data-tab="qr">QR / URL Assets</div>
   </div>
   <div class="content">
-    <div id="tab-staff"></div>
+    <div id="tab-overview"></div>
+    <div id="tab-staff" style="display:none;"></div>
     <div id="tab-customers" style="display:none;"></div>
     <div id="tab-items" style="display:none;"></div>
     <div id="tab-rates" style="display:none;"></div>
@@ -65,6 +87,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 
 <script src="/config.js"></script>
 <script>
@@ -85,7 +108,14 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
   token = data.token;
   currentUsername = username;
   localStorage.setItem("adminToken", token);
+  localStorage.setItem("adminUsername", username);
   showApp();
+});
+
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  localStorage.removeItem("adminToken");
+  localStorage.removeItem("adminUsername");
+  location.reload();
 });
 
 function authHeaders() {
@@ -95,6 +125,8 @@ function authHeaders() {
 function showApp() {
   document.getElementById("loginOverlay").style.display = "none";
   document.getElementById("app").style.display = "block";
+  document.getElementById("whoLabel").textContent = localStorage.getItem("adminUsername") || "";
+  loadOverview();
   loadStaff();
   loadRates();
   loadCustomers();
@@ -105,11 +137,50 @@ document.querySelectorAll(".tab").forEach(tab => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
-    ["staff", "customers", "items", "rates", "qr"].forEach(name => {
+    ["overview", "staff", "customers", "items", "rates", "qr"].forEach(name => {
       document.getElementById(`tab-${name}`).style.display = name === tab.dataset.tab ? "block" : "none";
     });
+    if (tab.dataset.tab === "overview") loadOverview();
+    if (tab.dataset.tab === "qr") loadQrTab();
   });
 });
+
+// ============================================================
+// Overview
+// ============================================================
+async function loadOverview() {
+  const res = await fetch(`${API_BASE}/api/top-customers?limit=10`, { headers: authHeaders() });
+  const data = res.ok ? await res.json() : { customers: [] };
+  const customers = data.customers || [];
+
+  const totalSubmissions = customers.reduce((sum, c) => sum + c.submission_count, 0);
+  const totalApproved = customers.reduce((sum, c) => sum + (c.total_approved_lkr || 0), 0);
+
+  const rows = customers.map(c => `
+    <tr>
+      <td>${c.dealer_name || "—"}</td>
+      <td>${c.mobile_number}</td>
+      <td>${c.submission_count}</td>
+      <td>LKR ${(c.total_approved_lkr || 0).toFixed(2)}</td>
+      <td>${new Date(c.last_submission).toLocaleDateString()}</td>
+    </tr>
+  `).join("");
+
+  document.getElementById("tab-overview").innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card"><div class="num">${customers.length}</div><div class="label">Active customers</div></div>
+      <div class="stat-card"><div class="num">${totalSubmissions}</div><div class="label">Total submissions (top 10)</div></div>
+      <div class="stat-card"><div class="num">LKR ${totalApproved.toFixed(0)}</div><div class="label">Approved rewards (top 10)</div></div>
+    </div>
+    <div class="panel">
+      <h3>Top Submitted Customers</h3>
+      <table>
+        <thead><tr><th>Dealer</th><th>Mobile</th><th>Submissions</th><th>Approved Reward</th><th>Last Submission</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" style="color:var(--muted);">No submissions yet.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
 
 // ============================================================
 // Staff Accounts
@@ -497,46 +568,144 @@ async function updateRate(productId) {
 }
 
 // ============================================================
-// QR / URL Assets
+// QR / URL Assets — rendered client-side (Level H error correction)
 // ============================================================
-document.getElementById("tab-qr").innerHTML = `
-  <div class="panel">
-    <h3>Generate Common Access QR / URL Asset</h3>
-    <div class="form-row">
-      <select id="qrType">
-        <option value="upload">Upload Portal QR</option>
-        <option value="track">Tracking Portal QR</option>
-      </select>
-      <input type="text" id="qrTargetUrl" placeholder="Target URL, e.g. https://rewards.company.com/upload" />
-      <select id="qrFormat">
-        <option value="svg">SVG (factory print)</option>
-        <option value="pdf">PDF (factory print)</option>
-        <option value="png">PNG (marketing/dealer)</option>
-      </select>
-      <button onclick="generateQr()">Request Asset</button>
+async function loadQrTab() {
+  const historyHtml = await fetchQrHistory();
+  document.getElementById("tab-qr").innerHTML = `
+    <div class="panel">
+      <h3>Generate Common Access QR / URL Asset</h3>
+      <div class="form-row">
+        <select id="qrType">
+          <option value="upload">Upload Portal QR</option>
+          <option value="track">Tracking Portal QR</option>
+        </select>
+        <input type="text" id="qrTargetUrl" placeholder="Target URL, e.g. https://rewards.company.com/upload" />
+        <button onclick="generateQr()">Generate QR</button>
+      </div>
+      <div id="qrMsg" class="msg"></div>
+      <div id="qrPreview"></div>
     </div>
-    <div id="qrMsg" class="msg"></div>
-    <p style="color:var(--muted);font-size:0.85rem;">
-      This logs the export request and returns an asset ID for the audit trail.
-      Rendering the actual vector file (Level-H error correction) is a follow-up
-      wiring step noted in the project README.
-    </p>
-  </div>
-`;
+    <div class="panel">
+      <h3>Recent Requests</h3>
+      <table>
+        <thead><tr><th>Type</th><th>Target URL</th><th>Requested</th><th></th></tr></thead>
+        <tbody>${historyHtml}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function fetchQrHistory() {
+  const res = await fetch(`${API_BASE}/api/admin/qr-assets`, { headers: authHeaders() });
+  if (!res.ok) return '<tr><td colspan="4" style="color:var(--muted);">Could not load history.</td></tr>';
+  const data = await res.json();
+  if (!data.assets?.length) return '<tr><td colspan="4" style="color:var(--muted);">No requests yet.</td></tr>';
+  return data.assets.map(a => `
+    <tr>
+      <td>${a.asset_type}</td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.target_url}</td>
+      <td>${new Date(a.created_at).toLocaleString()}</td>
+      <td><a onclick="renderQr('${a.target_url.replace(/'/g, "&apos;")}')" style="cursor:pointer;color:var(--primary);">Re-render</a></td>
+    </tr>
+  `).join("");
+}
 
 async function generateQr() {
   const assetType = document.getElementById("qrType").value;
   const targetUrl = document.getElementById("qrTargetUrl").value.trim();
-  const format = document.getElementById("qrFormat").value;
   const msg = document.getElementById("qrMsg");
   if (!targetUrl) { msg.className = "msg err"; msg.textContent = "Enter a target URL."; return; }
 
-  const res = await fetch(`${API_BASE}/api/admin/qr-assets`, {
-    method: "POST", headers: authHeaders(), body: JSON.stringify({ assetType, targetUrl, format })
+  // Log the request for the audit trail (system_audit_log + qr_assets).
+  await fetch(`${API_BASE}/api/admin/qr-assets`, {
+    method: "POST", headers: authHeaders(),
+    body: JSON.stringify({ assetType, targetUrl, format: "svg" })
   });
-  const data = await res.json();
-  msg.className = res.ok ? "msg ok" : "msg err";
-  msg.textContent = res.ok ? `Asset request logged (ID ${data.assetId}).` : data.error;
+
+  msg.className = "msg ok";
+  msg.textContent = "Generated below — download the format you need.";
+  renderQr(targetUrl);
+  loadQrTab(); // refresh history table in the background on next tab visit
+}
+
+function renderQr(targetUrl) {
+  // Level H = highest error correction, per SRS §3 (durable on printed bag flaps).
+  const qr = qrcode(0, "H"); // typeNumber 0 = auto-detect smallest size that fits
+  qr.addData(targetUrl);
+  qr.make();
+
+  const cellSize = 6;
+  const margin = 4;
+  const svgMarkup = qr.createSvgTag(cellSize, margin);
+
+  const preview = document.getElementById("qrPreview");
+  preview.innerHTML = `
+    <div class="qr-preview">
+      <div class="qr-box" id="qrSvgHolder">${svgMarkup}</div>
+      <div class="qr-actions">
+        <button onclick="downloadQrSvg('${targetUrl.replace(/'/g, "&apos;")}')">Download SVG (factory print)</button>
+        <button class="secondary" onclick="downloadQrPng('${targetUrl.replace(/'/g, "&apos;")}')">Download PNG (marketing/dealer)</button>
+        <button class="secondary" onclick="printQrPdf()">Print / Save as PDF</button>
+      </div>
+    </div>
+  `;
+}
+
+function downloadQrSvg(targetUrl) {
+  const qr = qrcode(0, "H");
+  qr.addData(targetUrl);
+  qr.make();
+  const svgMarkup = qr.createSvgTag(8, 4);
+  const blob = new Blob([svgMarkup], { type: "image/svg+xml" });
+  triggerDownload(blob, "reward-qr.svg");
+}
+
+function downloadQrPng(targetUrl) {
+  const qr = qrcode(0, "H");
+  qr.addData(targetUrl);
+  qr.make();
+  const cellSize = 8;
+  const moduleCount = qr.getModuleCount();
+  const size = moduleCount * cellSize;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = "#000000";
+  for (let row = 0; row < moduleCount; row++) {
+    for (let col = 0; col < moduleCount; col++) {
+      if (qr.isDark(row, col)) ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+    }
+  }
+  canvas.toBlob((blob) => triggerDownload(blob, "reward-qr.png"));
+}
+
+function printQrPdf() {
+  const svgHolder = document.getElementById("qrSvgHolder");
+  if (!svgHolder) return;
+  const win = window.open("", "_blank");
+  win.document.write(`
+    <html><head><title>Print QR</title></head>
+    <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+      ${svgHolder.innerHTML}
+    </body></html>
+  `);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 if (token) showApp();

@@ -10,7 +10,7 @@
 // file will route API calls there automatically.
 // ============================================================
 
-const WORKER_URL = "https://customereward.slcantec.workers.dev"; // <-- set this
+const WORKER_URL = "https://reward-system-api.YOUR-SUBDOMAIN.workers.dev"; // <-- set this
 
 window.API_BASE = (() => {
   const host = window.location.hostname;

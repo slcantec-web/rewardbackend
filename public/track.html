@@ -7,7 +7,12 @@
 <style>
   :root { --primary: #1a6b3c; --bg: #f5f7f6; --card: #fff; --border: #e2e5e4; --muted: #6b7280; }
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 16px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding-bottom: 16px; }
+  .app-header { background: var(--primary); color: #fff; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 14px; display: flex; align-items: center; gap: 10px; }
+  .app-header .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; opacity: 0.85; }
+  .app-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+  .app-header .tagline { font-size: 0.75rem; opacity: 0.85; margin-left: auto; }
+  .page-body { padding: 16px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
   h1 { font-size: 1.3rem; margin: 0 0 12px; }
   input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; font-size: 1rem; }
@@ -20,9 +25,21 @@
   .progress-track { background: #e5e7eb; border-radius: 999px; height: 10px; overflow: hidden; margin-top: 6px; }
   .progress-fill { background: var(--primary); height: 100%; }
   .muted { color: var(--muted); font-size: 0.85rem; }
+  .bank-form input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; font-size: 0.95rem; }
+  .bank-form button { width: 100%; padding: 11px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  .banner-warn { background: #fef3c7; color: #92400e; padding: 10px 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 10px; }
+  .banner-ok { background: #dcfce7; color: #166534; padding: 10px 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 10px; }
 </style>
 </head>
 <body>
+
+<div class="app-header">
+  <span class="logo-dot"></span>
+  <h2>CanTec Rewards</h2>
+  <span class="tagline">Track Your Claim</span>
+</div>
+
+<div class="page-body">
 
 <div class="card">
   <h1>Track Your Claim</h1>
@@ -33,13 +50,20 @@
 
 <div id="resultCard" style="display:none;"></div>
 
+</div>
+
 <script src="/config.js"></script>
 <script>
+let lastMobile = null;
+let lastSubmissionId = null;
+
 document.getElementById("trackBtn").addEventListener("click", async () => {
   const mobile = document.getElementById("mobileInput").value.trim();
   const submissionId = document.getElementById("submissionIdInput").value.trim();
   const resultCard = document.getElementById("resultCard");
   if (!mobile || !submissionId) return;
+  lastMobile = mobile;
+  lastSubmissionId = submissionId;
 
   const res = await fetch(`${window.API_BASE || ""}/api/track?mobile=${encodeURIComponent(mobile)}&submissionId=${encodeURIComponent(submissionId)}`);
   const data = await res.json();
@@ -75,8 +99,67 @@ document.getElementById("trackBtn").addEventListener("click", async () => {
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
       <div class="muted" style="margin-top:4px;">${pct}% to ${threshold} LKR minimum withdrawal</div>
     </div>
+    <div id="bankCard"></div>
   `;
+
+  if (data.wallet.status === "PENDING_PAYOUT") {
+    loadBankDetails();
+  }
 });
+
+async function loadBankDetails() {
+  const res = await fetch(`${window.API_BASE || ""}/api/track/bank-details?mobile=${encodeURIComponent(lastMobile)}&submissionId=${encodeURIComponent(lastSubmissionId)}`);
+  const data = await res.json();
+  const bankCard = document.getElementById("bankCard");
+
+  if (data.hasDetails) {
+    bankCard.innerHTML = `
+      <div class="card">
+        <div class="banner-ok">✅ Your reward has reached the payout threshold and bank details are on file. Finance will process your payment shortly.</div>
+        <div class="muted">Account</div>
+        <div>${data.details.account_name} — ${data.details.bank_name}${data.details.branch_name ? " (" + data.details.branch_name + ")" : ""}</div>
+        <div class="muted" style="margin-top:4px;">${data.details.account_number}</div>
+      </div>
+    `;
+    return;
+  }
+
+  bankCard.innerHTML = `
+    <div class="card">
+      <div class="banner-warn">⚠️ Your reward has reached the payout threshold. Please add your bank details so Finance can send your payment.</div>
+      <div class="bank-form">
+        <input type="text" id="bankAccountName" placeholder="Account Holder Name" />
+        <input type="text" id="bankAccountNumber" placeholder="Account Number" />
+        <input type="text" id="bankName" placeholder="Bank Name" />
+        <input type="text" id="bankBranch" placeholder="Branch (optional)" />
+        <button id="saveBankBtn">Submit Bank Details</button>
+        <div id="bankMsg" class="muted" style="margin-top:6px;"></div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("saveBankBtn").addEventListener("click", async () => {
+    const body = {
+      mobile: lastMobile,
+      submissionId: lastSubmissionId,
+      accountName: document.getElementById("bankAccountName").value.trim(),
+      accountNumber: document.getElementById("bankAccountNumber").value.trim(),
+      bankName: document.getElementById("bankName").value.trim(),
+      branchName: document.getElementById("bankBranch").value.trim() || undefined,
+    };
+    const msg = document.getElementById("bankMsg");
+    if (!body.accountName || !body.accountNumber || !body.bankName) {
+      msg.textContent = "Account name, number, and bank name are required.";
+      return;
+    }
+    const res = await fetch(`${window.API_BASE || ""}/api/track/bank-details`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { msg.textContent = data.error; return; }
+    loadBankDetails();
+  });
+}
 </script>
 </body>
 </html>

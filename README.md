@@ -10,7 +10,8 @@ reward-system/
 ├── wrangler.toml          # Worker config (D1 + R2 bindings)
 ├── schema.sql             # D1 schema + seed data (fresh installs)
 ├── migrations/
-│   └── 0002_customer_item_master.sql   # Run only if upgrading an already-deployed DB
+│   ├── 0002_customer_item_master.sql    # Run only if upgrading an already-deployed DB
+│   └── 0003_customer_bank_details.sql   # Run only if upgrading an already-deployed DB
 ├── package.json
 ├── src/
 │   ├── index.ts           # Hono app — all API routes (customer, finance, admin)
@@ -55,10 +56,10 @@ Open your D1 database in the dashboard → **Console**, paste the contents of
 products/dealer.
 
 > Already deployed before this update? Paste
-> `migrations/0002_customer_item_master.sql` into the Console instead — it
-> adds the `customer_code` / `item_code` / `contact_phone` columns the
-> Customer and Item Master screens depend on. Fresh installs get these from
-> `schema.sql` directly and can skip this.
+> `migrations/0002_customer_item_master.sql` **and**
+> `migrations/0003_customer_bank_details.sql` into the Console instead — the
+> latter adds the `customer_bank_details` table the payout flow depends on.
+> Fresh installs get these from `schema.sql` directly and can skip this.
 
 ### 4. Deploy the Worker (API)
 
@@ -163,6 +164,10 @@ npx wrangler pages deploy admin                 # Finance dashboard + Admin Pane
 - **Customer (B2B Dealer) Master**: add/edit/deactivate dealers, plus Excel (.xlsx/.csv) bulk upload that upserts by `customerCode`
 - **Item Master**: add/edit/deactivate products (with reward rate), plus Excel bulk upload that upserts by `itemCode` and updates rates when changed
 - Finance review queue and detail view now join and display the dealer name from the Customer Master, so Finance always sees current master data rather than a raw ID
+- **Bank details & payout flow**: once a customer's wallet hits the 1,000 LKR threshold, `track.html` prompts them to submit bank account details; Finance Lead's new **Payouts** view (in `finance.html`, visible only to the `finance_lead` role) shows each pending payout with those bank details and requires an ERP reference + bank reference before it can be marked paid — binding is blocked server-side if details are missing
+- **Top Submitted Customers**: a shared `/api/top-customers` endpoint (readable by Admin or Finance tokens) now feeds a leaderboard on both the Admin Panel's new **Overview** tab and a sidebar widget in the Finance dashboard
+- **Headers, navigation, and logout**: every page now has a header identifying the app; Admin Panel and Finance Dashboard cross-link to each other and both have a working **Log out** button (previously missing)
+- **QR generation now actually produces a file**: the Admin Panel's QR tab renders a real QR code client-side (Level-H error correction, per SRS §3) the moment you generate one, with **Download SVG**, **Download PNG**, and **Print/Save as PDF** buttons — no more "request logged, nothing to open." A request history table (via a new `GET /api/admin/qr-assets`) lets you re-render any past URL on demand.
 - Customer PWA (product steppers, bill capture + client-side compression, GPS, device blueprint)
 - Finance dashboard (queue, bill viewer, telemetry card, quantity verification, approve/reject)
 
@@ -172,3 +177,11 @@ npx wrangler pages deploy admin                 # Finance dashboard + Admin Pane
 - **Auth hardening**: the included auth is a minimal HMAC-signed session, sufficient for internal tooling but not a replacement for Cloudflare Access or a vetted JWT library at scale.
 - **Dealer geocoding**: Customer Master lets you type lat/lng directly, but there's no map picker or automatic geocoding yet — worth adding if dealers are onboarded frequently.
 - **Image serving**: bill images are streamed through the Worker (`/api/finance/submissions/:id/image`) — fine for internal review traffic; consider R2 signed URLs if traffic grows.
+
+## Next stage (deferred, per your note)
+
+Not built yet — flagged for a follow-up pass rather than included here:
+- **Email verification at submission**: capturing and verifying a customer email on the bill-submission form (with auto-fill from a previously-saved email against their mobile number).
+- **Reference-number email on submission**: sending a confirmation email with the submission ID once a bill is submitted, via your existing email/SMS gateway setup rather than a new provider.
+
+Both are natural additions to `POST /api/submissions` (customer PWA) and the Worker once you're ready — happy to wire them in next.

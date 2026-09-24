@@ -30,6 +30,14 @@ async function getSession(c: any, secret: string): Promise<SessionPayload | null
   return verifySession(token, secret);
 }
 
+// Accepts either an Admin or a Finance token — used by shared read-only
+// endpoints (e.g. dashboard summaries) that both panels display.
+async function getAnySession(c: any): Promise<SessionPayload | null> {
+  const financeSession = await getSession(c, c.env.FINANCE_JWT_SECRET);
+  if (financeSession) return financeSession;
+  return getSession(c, c.env.ADMIN_JWT_SECRET);
+}
+
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64.replace(/^data:.*;base64,/, ""));
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
@@ -207,6 +215,93 @@ app.get("/api/track", async (c) => {
     .first<{ balance_lkr: number; status: string }>();
 
   return c.json({ submission, items, wallet: wallet || { balance_lkr: 0, status: "ACTIVE" } });
+});
+
+// ============================================================
+// Customer: Bank details (required once wallet reaches payout threshold)
+// ============================================================
+
+async function verifyOwnership(db: D1Database, mobile: string, submissionId: string): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT id FROM submissions WHERE id = ? AND mobile_number = ?`)
+    .bind(submissionId, mobile)
+    .first();
+  return !!row;
+}
+
+app.get("/api/track/bank-details", async (c) => {
+  const mobile = c.req.query("mobile");
+  const submissionId = c.req.query("submissionId");
+  if (!mobile || !submissionId) return c.json({ error: "mobile and submissionId are required" }, 400);
+  if (!(await verifyOwnership(c.env.DB, mobile, submissionId))) return c.json({ error: "Not found" }, 404);
+
+  const details = await c.env.DB.prepare(
+    `SELECT account_name, account_number, bank_name, branch_name FROM customer_bank_details WHERE mobile_number = ?`
+  )
+    .bind(mobile)
+    .first<{ account_name: string; account_number: string; bank_name: string; branch_name: string | null }>();
+
+  if (!details) return c.json({ hasDetails: false });
+
+  // Mask all but the last 4 digits when echoing back for display.
+  const masked = details.account_number.replace(/.(?=.{4})/g, "•");
+  return c.json({ hasDetails: true, details: { ...details, account_number: masked } });
+});
+
+app.post("/api/track/bank-details", async (c) => {
+  const body = await c.req.json<{
+    mobile: string;
+    submissionId: string;
+    accountName: string;
+    accountNumber: string;
+    bankName: string;
+    branchName?: string;
+  }>();
+
+  if (!body.mobile || !body.submissionId) return c.json({ error: "mobile and submissionId are required" }, 400);
+  if (!(await verifyOwnership(c.env.DB, body.mobile, body.submissionId))) return c.json({ error: "Not found" }, 404);
+  if (!body.accountName || !body.accountNumber || !body.bankName) {
+    return c.json({ error: "Account name, account number, and bank name are required" }, 400);
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO customer_bank_details (mobile_number, account_name, account_number, bank_name, branch_name)
+     VALUES (?,?,?,?,?)
+     ON CONFLICT(mobile_number) DO UPDATE SET
+       account_name = excluded.account_name,
+       account_number = excluded.account_number,
+       bank_name = excluded.bank_name,
+       branch_name = excluded.branch_name,
+       updated_at = datetime('now')`
+  )
+    .bind(body.mobile, body.accountName, body.accountNumber, body.bankName, body.branchName || null)
+    .run();
+
+  return c.json({ ok: true });
+});
+
+// ============================================================
+// Shared: Top submitted customers (Admin + Finance dashboards)
+// ============================================================
+
+app.get("/api/top-customers", async (c) => {
+  const session = await getAnySession(c);
+  if (!requireRole(session, ["admin", "finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
+
+  const limit = Math.min(20, parseInt(c.req.query("limit") || "10", 10));
+  const { results } = await c.env.DB.prepare(
+    `SELECT s.mobile_number, d.name as dealer_name, COUNT(*) as submission_count,
+            SUM(CASE WHEN s.status = 'APPROVED' THEN s.total_approved_reward_lkr ELSE 0 END) as total_approved_lkr,
+            MAX(s.created_at_server) as last_submission
+     FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id
+     GROUP BY s.mobile_number
+     ORDER BY submission_count DESC
+     LIMIT ?`
+  )
+    .bind(limit)
+    .all();
+
+  return c.json({ customers: results });
 });
 
 // ============================================================
@@ -411,7 +506,9 @@ app.get("/api/finance-lead/payouts", async (c) => {
   if (!requireRole(session, ["finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
 
   const { results } = await c.env.DB.prepare(
-    `SELECT * FROM payouts WHERE status = 'PENDING' ORDER BY created_at ASC`
+    `SELECT p.*, b.account_name, b.account_number, b.bank_name, b.branch_name
+     FROM payouts p LEFT JOIN customer_bank_details b ON b.mobile_number = p.mobile_number
+     WHERE p.status = 'PENDING' ORDER BY p.created_at ASC`
   ).all();
   return c.json({ payouts: results });
 });
@@ -427,6 +524,15 @@ app.post("/api/finance-lead/payouts/:id/bind", async (c) => {
     .bind(id)
     .first<{ mobile_number: string }>();
   if (!payout) return c.json({ error: "Not found" }, 404);
+
+  const bankDetails = await c.env.DB.prepare(
+    `SELECT mobile_number FROM customer_bank_details WHERE mobile_number = ?`
+  )
+    .bind(payout.mobile_number)
+    .first();
+  if (!bankDetails) {
+    return c.json({ error: "Customer has not submitted bank details yet — cannot bind payout." }, 400);
+  }
 
   await c.env.DB.batch([
     c.env.DB.prepare(
@@ -975,6 +1081,16 @@ app.post("/api/admin/dealers/bulk", async (c) => {
     .run();
 
   return c.json({ created, updated, errors });
+});
+
+app.get("/api/admin/qr-assets", async (c) => {
+  const session = await getSession(c, c.env.ADMIN_JWT_SECRET);
+  if (!requireRole(session, ["admin"])) return c.json({ error: "Unauthorized" }, 401);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, asset_type, target_url, format, created_by, created_at FROM qr_assets ORDER BY created_at DESC LIMIT 50`
+  ).all();
+  return c.json({ assets: results });
 });
 
 app.post("/api/admin/qr-assets", async (c) => {

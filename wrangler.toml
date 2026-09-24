@@ -7,7 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "reward-system-db"
-database_id = "92e2dd9a-5241-4094-a1f5-3d381c3d8e1e"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 
 # ---- R2 Bucket (bill images) ----
 [[r2_buckets]]

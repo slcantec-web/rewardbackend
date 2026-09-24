@@ -20,10 +20,20 @@
     background: var(--bg);
     color: var(--text);
     margin: 0;
-    padding: 16px;
-    padding-top: calc(16px + env(safe-area-inset-top, 0px));
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
+  .app-header {
+    background: var(--primary);
+    color: #fff;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .app-header .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; opacity: 0.85; }
+  .app-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+  .app-header .tagline { font-size: 0.75rem; opacity: 0.85; margin-left: auto; }
+  .page-body { padding: 16px; }
   .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -72,6 +82,14 @@
 </style>
 </head>
 <body>
+
+<div class="app-header">
+  <span class="logo-dot"></span>
+  <h2>CanTec Rewards</h2>
+  <span class="tagline">Purchase Reward Claim</span>
+</div>
+
+<div class="page-body">
 
 <div class="card">
   <h1>Submit Your Purchase</h1>
@@ -126,6 +144,8 @@
 <p style="text-align:center;margin-top:14px;">
   <a class="track-link" href="/track.html">Already submitted? Track your claim →</a>
 </p>
+
+</div>
 
 <script src="/config.js"></script>
 <script src="/app.js"></script>

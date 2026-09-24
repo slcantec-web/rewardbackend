@@ -9,10 +9,10 @@
     "db:migrate:remote": "wrangler d1 execute reward-system-db --remote --file=./schema.sql"
   },
   "dependencies": {
-    "hono": "^4.6.0"
+    "hono": "^4.13.9"
   },
   "devDependencies": {
-    "wrangler": "^3.90.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.9.3",
+    "wrangler": "^3.90.0"
   }
 }
