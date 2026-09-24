@@ -111,28 +111,23 @@ async function loadBankDetails() {
   const res = await fetch(`${window.API_BASE || ""}/api/track/bank-details?mobile=${encodeURIComponent(lastMobile)}&submissionId=${encodeURIComponent(lastSubmissionId)}`);
   const data = await res.json();
   const bankCard = document.getElementById("bankCard");
+  const d = data.details || {};
 
-  if (data.hasDetails) {
-    bankCard.innerHTML = `
-      <div class="card">
-        <div class="banner-ok">✅ Your reward has reached the payout threshold and bank details are on file. Finance will process your payment shortly.</div>
-        <div class="muted">Account</div>
-        <div>${data.details.account_name} — ${data.details.bank_name}${data.details.branch_name ? " (" + data.details.branch_name + ")" : ""}</div>
-        <div class="muted" style="margin-top:4px;">${data.details.account_number}</div>
-      </div>
-    `;
-    return;
-  }
-
+  // Prefill from previously saved details for this mobile number — customer does not re-enter everything.
+  const has = !!data.hasDetails;
   bankCard.innerHTML = `
     <div class="card">
-      <div class="banner-warn">⚠️ Your reward has reached the payout threshold. Please add your bank details so Finance can send your payment.</div>
+      ${has
+        ? `<div class="banner-ok">✅ Bank details are on file for this mobile number. Finance will process your payment shortly. You can update them below if needed.</div>
+           <div class="muted">On file</div>
+           <div style="margin-bottom:10px;">${d.account_name} — ${d.bank_name}${d.branch_name ? " (" + d.branch_name + ")" : ""} · ${d.account_number}</div>`
+        : `<div class="banner-warn">⚠️ Your reward has reached the payout threshold. Please add your bank details so Finance can send your payment.</div>`}
       <div class="bank-form">
-        <input type="text" id="bankAccountName" placeholder="Account Holder Name" />
-        <input type="text" id="bankAccountNumber" placeholder="Account Number" />
-        <input type="text" id="bankName" placeholder="Bank Name" />
-        <input type="text" id="bankBranch" placeholder="Branch (optional)" />
-        <button id="saveBankBtn">Submit Bank Details</button>
+        <input type="text" id="bankAccountName" placeholder="Account Holder Name" value="${has ? (d.account_name || "").replace(/"/g, "&quot;") : ""}" />
+        <input type="text" id="bankAccountNumber" placeholder="${has ? "Account Number (leave blank to keep current)" : "Account Number"}" />
+        <input type="text" id="bankName" placeholder="Bank Name" value="${has ? (d.bank_name || "").replace(/"/g, "&quot;") : ""}" />
+        <input type="text" id="bankBranch" placeholder="Branch (optional)" value="${has ? (d.branch_name || "").replace(/"/g, "&quot;") : ""}" />
+        <button id="saveBankBtn">${has ? "Update Bank Details" : "Submit Bank Details"}</button>
         <div id="bankMsg" class="muted" style="margin-top:6px;"></div>
       </div>
     </div>
@@ -143,13 +138,16 @@ async function loadBankDetails() {
       mobile: lastMobile,
       submissionId: lastSubmissionId,
       accountName: document.getElementById("bankAccountName").value.trim(),
-      accountNumber: document.getElementById("bankAccountNumber").value.trim(),
+      accountNumber: document.getElementById("bankAccountNumber").value.trim() || undefined,
       bankName: document.getElementById("bankName").value.trim(),
       branchName: document.getElementById("bankBranch").value.trim() || undefined,
     };
     const msg = document.getElementById("bankMsg");
-    if (!body.accountName || !body.accountNumber || !body.bankName) {
-      msg.textContent = "Account name, number, and bank name are required.";
+    // On update, account number can be blank (keeps existing). On first submit it is required.
+    if (!body.accountName || !body.bankName || (!has && !body.accountNumber)) {
+      msg.textContent = has
+        ? "Account name and bank name are required."
+        : "Account name, number, and bank name are required.";
       return;
     }
     const res = await fetch(`${window.API_BASE || ""}/api/track/bank-details`, {

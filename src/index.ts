@@ -1123,4 +1123,10 @@ app.post("/api/admin/qr-assets", async (c) => {
   return c.json({ ok: true, assetId: result.meta.last_row_id });
 });
 
+// Wire enhanced routes (device insights, payout sync, location parsing, richer finance APIs).
+// Hono keeps the first matching handler, so extras must register *before* export and
+// after the base routes they intentionally override.
+import { registerExtras } from "./extras";
+registerExtras(app);
+
 export default app;

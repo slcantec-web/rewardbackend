@@ -9,7 +9,7 @@
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; }
   .layout { display: flex; height: 100vh; }
-  .sidebar { width: 340px; border-right: 1px solid var(--border); background: var(--card); overflow-y: auto; }
+  .sidebar { width: 360px; border-right: 1px solid var(--border); background: var(--card); overflow-y: auto; }
   .main { flex: 1; overflow-y: auto; padding: 20px; }
   .queue-item { padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
   .queue-item:hover { background: #f9fafb; }
@@ -20,6 +20,10 @@
   .risk-low { background: #dcfce7; color: #166534; }
   .risk-med { background: #fef3c7; color: #92400e; }
   .risk-high { background: #fee2e2; color: #991b1b; }
+  .device-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; margin-left: 4px; }
+  .device-shared { background: #fce7f3; color: #9d174d; }
+  .device-repeat { background: #e0e7ff; color: #3730a3; }
+  .device-single { background: #f3f4f6; color: #4b5563; }
   .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
   .panel h3 { margin: 0 0 10px; font-size: 1rem; }
@@ -34,6 +38,7 @@
   .btn-approve { background: var(--primary); color: #fff; }
   .btn-reject { background: var(--danger); color: #fff; }
   .btn-save { background: #374151; color: #fff; }
+  .btn-secondary { background: #e5e7eb; color: #111; border: 1px solid var(--border); }
   #loginOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
   #loginBox { background: #fff; padding: 24px; border-radius: 12px; width: 300px; }
   #loginBox input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; }
@@ -55,6 +60,11 @@
   .payout-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
   .payout-card .bank-info { background: #f9fafb; border-radius: 8px; padding: 10px; margin: 10px 0; font-size: 0.9rem; }
   .payout-card input { padding: 9px; border: 1px solid var(--border); border-radius: 8px; margin-right: 8px; margin-bottom: 8px; width: 220px; }
+  .muted { color: var(--muted); font-size: 0.85rem; }
+  .cust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 0.9rem; }
+  .cust-grid .label { color: var(--muted); font-size: 0.8rem; }
+  .device-card { background: #f9fafb; border-radius: 8px; padding: 10px; margin-top: 8px; font-size: 0.85rem; }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -98,8 +108,8 @@ const API_BASE = window.API_BASE || "";
 let token = localStorage.getItem("financeToken") || null;
 let role = localStorage.getItem("financeRole") || null;
 let currentId = null;
+let lastPayouts = [];
 
-// ---- Login ----
 document.getElementById("loginBtn").addEventListener("click", async () => {
   const username = document.getElementById("username").value;
   const password = document.getElementById("password").value;
@@ -164,9 +174,12 @@ function authHeaders() {
   return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
-// ============================================================
-// Top Customers (sidebar widget)
-// ============================================================
+function deviceClsLabel(subs, mobiles) {
+  if (mobiles >= 2) return { cls: "device-shared", text: `SHARED · ${subs} claims · ${mobiles} mobiles` };
+  if (subs >= 2) return { cls: "device-repeat", text: `REPEAT · ${subs} claims` };
+  return { cls: "device-single", text: "Single use" };
+}
+
 async function loadTopCustomers() {
   const res = await fetch(`${API_BASE}/api/top-customers?limit=5`, { headers: authHeaders() });
   if (!res.ok) return;
@@ -188,11 +201,14 @@ async function loadQueue() {
   if (res.status === 401) { localStorage.removeItem("financeToken"); location.reload(); return; }
   const data = await res.json();
   const list = document.getElementById("queueList");
-  list.innerHTML = data.submissions.map(s => {
+  list.innerHTML = (data.submissions || []).map(s => {
     const riskClass = s.risk_score >= 60 ? "risk-high" : s.risk_score >= 25 ? "risk-med" : "risk-low";
+    const d = deviceClsLabel(s.device_submissions || 1, s.device_mobiles || 1);
     return `
       <div class="queue-item" data-id="${s.id}">
-        <div class="sub-id">${s.id}</div>
+        <div class="sub-id">${s.id}
+          <span class="device-badge ${d.cls}" title="Device usage">${d.text}</span>
+        </div>
         <div class="meta">${s.dealer_name || "Unknown dealer"} · ${s.mobile_number}</div>
         <div class="meta">${new Date(s.created_at_server).toLocaleString()}</div>
         <span class="risk-badge ${riskClass}">Risk ${s.risk_score}</span>
@@ -217,8 +233,6 @@ async function loadSubmission(id) {
 }
 
 async function loadBillImage(id) {
-  // <img src> can't carry an Authorization header, so fetch the bytes
-  // ourselves and hand the element a local object URL.
   const res = await fetch(`${API_BASE}/api/finance/submissions/${id}/image`, { headers: authHeaders() });
   if (!res.ok) return;
   const blob = await res.blob();
@@ -230,14 +244,30 @@ function renderReview(data) {
   const s = data.submission;
   const flags = (s.fraud_flags || "").split(",").filter(Boolean);
   const riskClass = s.risk_score >= 60 ? "risk-high" : s.risk_score >= 25 ? "risk-med" : "risk-low";
+  const device = data.device || {};
+  const act = device.activity || {};
+  const sum = device.summary || {};
+  const dBadge = deviceClsLabel(act.total || 1, act.mobiles || 1);
+  const cust = data.customer || {};
+  const stats = cust.stats || {};
+  const wallet = cust.wallet || {};
+  const bank = cust.bank;
 
-  const itemRows = data.items.map(i => `
+  const itemRows = (data.items || []).map(i => `
     <div class="item-line">
       <span>${i.name}</span>
       <span style="color:var(--muted);font-size:0.85rem;">Claimed: ${i.claimed_qty}</span>
       <input type="number" min="0" value="${i.verified_qty ?? i.claimed_qty}" data-item-id="${i.id}" data-rate="${i.rate_lkr_snapshot}" class="verified-qty-input" />
     </div>
   `).join("");
+
+  const recentHtml = (cust.recent || []).slice(0, 5).map(r =>
+    `<div class="metric-row"><span>${r.id}</span><span>${r.status} · LKR ${(r.total_approved_reward_lkr || r.total_claimed_reward_lkr || 0).toFixed(0)}</span></div>`
+  ).join("") || '<div class="muted">No history</div>';
+
+  const devicesHtml = (cust.devices || []).map(d =>
+    `<div class="metric-row"><span>${d.label || d.hash?.slice(0, 10)}</span><span>${d.claims} claims</span></div>`
+  ).join("") || '<div class="muted">—</div>';
 
   document.getElementById("reviewPanel").innerHTML = `
     <div class="review-grid">
@@ -246,16 +276,47 @@ function renderReview(data) {
           <h3>Uploaded Invoice — ${s.id}</h3>
           <img id="billImage" alt="Bill" />
         </div>
+        <div class="panel">
+          <h3>Customer Profile · ${s.mobile_number}</h3>
+          <div class="cust-grid">
+            <div><div class="label">Total claims</div><div><b>${stats.total ?? 0}</b></div></div>
+            <div><div class="label">Approved / Rejected / Pending</div><div>${stats.approved ?? 0} / ${stats.rejected ?? 0} / ${stats.pending ?? 0}</div></div>
+            <div><div class="label">Approved LKR</div><div><b>${Number(stats.approved_lkr || 0).toFixed(2)}</b></div></div>
+            <div><div class="label">Wallet balance</div><div><b>${Number(wallet.balance_lkr || 0).toFixed(2)}</b> <span class="muted">(${wallet.status || "ACTIVE"})</span></div></div>
+            <div><div class="label">Paid out</div><div>${cust.paidOut ? `LKR ${Number(cust.paidOut.total || 0).toFixed(2)} (${cust.paidOut.n || 0} txns)` : "—"}</div></div>
+            <div><div class="label">First / last claim</div><div class="muted">${stats.first_claim ? new Date(stats.first_claim).toLocaleDateString() : "—"} → ${stats.last_claim ? new Date(stats.last_claim).toLocaleDateString() : "—"}</div></div>
+          </div>
+          ${bank ? `<div style="margin-top:10px;font-size:0.9rem;"><b>Bank:</b> ${bank.account_name} · ${bank.bank_name}${bank.branch_name ? " (" + bank.branch_name + ")" : ""} · ${bank.account_number}</div>` : '<div class="muted" style="margin-top:8px;">No bank details on file yet.</div>'}
+          <div style="margin-top:12px;"><div class="label" style="margin-bottom:4px;">Recent claims</div>${recentHtml}</div>
+          <div style="margin-top:10px;"><div class="label" style="margin-bottom:4px;">Devices used by this mobile</div>${devicesHtml}</div>
+        </div>
       </div>
       <div>
         <div class="panel">
           <h3>Telemetry &amp; Anti-Fraud Card</h3>
           <div class="metric-row"><span>Customer Mobile</span><span>${s.mobile_number}</span></div>
-          <div class="metric-row"><span>Dealer</span><span>${s.dealer_name || "Unknown"}</span></div>
+          <div class="metric-row"><span>Dealer</span><span>${s.dealer_name || "Unknown"}${s.dealer_city ? " · " + s.dealer_city : ""}</span></div>
           <div class="metric-row"><span>Dealer Distance</span><span>${s.dealer_distance_km != null ? s.dealer_distance_km.toFixed(2) + " km" : "N/A"}</span></div>
           <div class="metric-row"><span>Time Delta</span><span>${Math.round(s.time_delta_seconds || 0)}s</span></div>
           <div class="metric-row"><span>Risk Score</span><span class="risk-badge ${riskClass}">${s.risk_score}/100</span></div>
-          <div style="margin-top:8px;">${flags.map(f => `<span class="flag-chip">${f}</span>`).join("") || '<span style="color:var(--muted);font-size:0.85rem;">No flags</span>'}</div>
+          <div style="margin-top:8px;">${flags.map(f => `<span class="flag-chip">${f}</span>`).join("") || '<span class="muted">No flags</span>'}</div>
+
+          <div class="device-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <b>Device blueprint</b>
+              <span class="device-badge ${dBadge.cls}">${dBadge.text}</span>
+            </div>
+            <div class="metric-row"><span>Device</span><span>${sum.label || "Unknown"}</span></div>
+            <div class="metric-row"><span>OS / Browser</span><span>${sum.os || "—"} ${sum.osVersion || ""} · ${sum.browser || "—"}</span></div>
+            <div class="metric-row"><span>Screen</span><span>${sum.screen || "—"}</span></div>
+            <div class="metric-row"><span>GPU</span><span style="max-width:55%;text-align:right;overflow:hidden;text-overflow:ellipsis;">${sum.gpu || "—"}</span></div>
+            <div class="metric-row"><span>Cores / Memory</span><span>${sum.cores ?? "—"} / ${sum.memoryGb ?? "—"} GB</span></div>
+            <div class="metric-row"><span>Network</span><span>${sum.network || sum.language || "—"}</span></div>
+            <div class="metric-row"><span>Fingerprint</span><span style="font-family:monospace;font-size:0.75rem;">${(device.fingerprint || "").slice(0, 16)}…</span></div>
+            <div class="metric-row"><span>Device history</span><span>${act.approved || 0} approved · ${act.rejected || 0} rejected · ${act.pending || 0} pending</span></div>
+            ${act.mobiles >= 2 ? `<div style="color:var(--danger);margin-top:6px;font-weight:600;">⚠ This device has been used by ${act.mobiles} different mobile numbers.</div>` : ""}
+            ${act.total >= 2 && act.mobiles < 2 ? `<div style="color:#92400e;margin-top:6px;">This device has submitted ${act.total} claims (same mobile).</div>` : ""}
+          </div>
         </div>
         <div class="panel">
           <h3>Item Verification &amp; Reward</h3>
@@ -293,7 +354,8 @@ function recalcTotal() {
   document.querySelectorAll(".verified-qty-input").forEach(inp => {
     total += (parseFloat(inp.value) || 0) * parseFloat(inp.dataset.rate);
   });
-  document.getElementById("calcTotal").textContent = `LKR ${total.toFixed(2)}`;
+  const el = document.getElementById("calcTotal");
+  if (el) el.textContent = `LKR ${total.toFixed(2)}`;
 }
 
 function collectItems() {
@@ -316,6 +378,7 @@ async function approveSubmission() {
     method: "POST", headers: authHeaders()
   });
   const data = await res.json();
+  if (!res.ok) { alert(data.error || "Approve failed"); return; }
   alert(`Approved. Total credited: LKR ${data.totalApproved?.toFixed(2)}`);
   loadQueue();
   document.getElementById("reviewPanel").innerHTML = `<div class="panel">Select a submission from the queue to begin review.</div>`;
@@ -331,24 +394,31 @@ async function rejectSubmission() {
   document.getElementById("reviewPanel").innerHTML = `<div class="panel">Select a submission from the queue to begin review.</div>`;
 }
 
-// ============================================================
-// Finance Lead: Pending Payouts
-// ============================================================
+// ---------- Payouts (Finance Lead) ----------
 async function loadPayouts() {
-  const res = await fetch(`${API_BASE}/api/finance-lead/payouts`, { headers: authHeaders() });
+  const res = await fetch(`${API_BASE}/api/finance-lead/payouts?status=PENDING`, { headers: authHeaders() });
   const data = await res.json();
+  lastPayouts = data.payouts || [];
+  const threshold = data.threshold || 1000;
   const list = document.getElementById("queueList");
-  list.innerHTML = `<div style="padding:14px 16px;font-weight:600;">Pending Payouts (${(data.payouts || []).length})</div>`;
+  list.innerHTML = `
+    <div style="padding:14px 16px;">
+      <div style="font-weight:600;margin-bottom:8px;">Pending Payouts (${lastPayouts.length})</div>
+      <div class="muted" style="margin-bottom:8px;">Threshold: LKR ${threshold}. Payouts sync automatically when balance ≥ threshold.</div>
+      <button class="btn btn-secondary" style="width:100%;padding:8px;" onclick="exportPayoutsCsv()">Download CSV</button>
+      <button class="btn btn-secondary" style="width:100%;padding:8px;margin-top:6px;" onclick="exportPayoutsExcel()">Download Excel-friendly CSV</button>
+    </div>
+  `;
 
-  document.getElementById("reviewPanel").innerHTML = (data.payouts || []).length
-    ? data.payouts.map(p => `
+  document.getElementById("reviewPanel").innerHTML = lastPayouts.length
+    ? lastPayouts.map(p => `
         <div class="payout-card">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
               <div style="font-weight:700;">${p.mobile_number}</div>
-              <div class="muted" style="font-size:0.85rem;">Requested ${new Date(p.created_at).toLocaleString()}</div>
+              <div class="muted" style="font-size:0.85rem;">Requested ${new Date(p.created_at).toLocaleString()} · ${p.approved_claims || 0} approved claims</div>
             </div>
-            <div style="font-size:1.3rem;font-weight:700;">LKR ${p.amount_lkr.toFixed(2)}</div>
+            <div style="font-size:1.3rem;font-weight:700;">LKR ${Number(p.amount_lkr).toFixed(2)}</div>
           </div>
           <div class="bank-info">
             ${p.account_name
@@ -364,7 +434,38 @@ async function loadPayouts() {
           </div>
         </div>
       `).join("")
-    : `<div class="panel">No pending payouts.</div>`;
+    : `<div class="panel">No pending payouts. (Balances under threshold or already paid are hidden. Use sync on open.)</div>`;
+}
+
+function csvEscape(v) {
+  const s = v == null ? "" : String(v);
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadCsv(filename, rows) {
+  const bom = "\uFEFF";
+  const text = bom + rows.map(r => r.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function exportPayoutsCsv() {
+  const header = ["id", "mobile_number", "amount_lkr", "status", "account_name", "account_number", "bank_name", "branch_name", "approved_claims", "created_at", "erp_reference", "bank_reference"];
+  const rows = [header, ...lastPayouts.map(p => header.map(k => p[k] ?? ""))];
+  downloadCsv(`payouts-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  await fetch(`${API_BASE}/api/finance-lead/payouts/export-log`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ format: "csv", rows: lastPayouts.length })
+  }).catch(() => {});
+}
+
+async function exportPayoutsExcel() {
+  // Same CSV with BOM — opens cleanly in Excel
+  await exportPayoutsCsv();
 }
 
 async function bindPayout(payoutId) {
