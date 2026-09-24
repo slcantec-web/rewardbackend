@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Claim Your Reward</title>
+<link rel="manifest" href="/manifest.json" />
+<style>
+  :root {
+    --primary: #1a6b3c;
+    --bg: #f5f7f6;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #6b7280;
+    --border: #e2e5e4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 16px;
+    padding-top: calc(16px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 16px; }
+  label { font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 6px; }
+  select, input[type=text] {
+    width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem;
+  }
+  .product-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .product-row:last-child { border-bottom: none; }
+  .product-name { font-weight: 500; }
+  .stepper { display: flex; align-items: center; gap: 10px; }
+  .stepper button {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); font-size: 1.1rem; cursor: pointer;
+  }
+  .stepper span { min-width: 24px; text-align: center; font-weight: 600; }
+  .upload-box {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 20px;
+    text-align: center; color: var(--muted); cursor: pointer;
+  }
+  .upload-box.has-file { border-color: var(--primary); color: var(--primary); }
+  #billFileInput { display: none; }
+  .telemetry-line { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 4px 0; }
+  .status-ok { color: var(--primary); }
+  .status-pending { color: var(--muted); }
+  .submit-btn {
+    width: 100%; padding: 14px; background: var(--primary); color: white; border: none;
+    border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer;
+  }
+  .submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+  .result-banner {
+    text-align: center; padding: 16px; border-radius: 10px; margin-bottom: 14px; display: none;
+  }
+  .result-banner.ok { background: #e6f4ea; color: var(--primary); }
+  .result-banner.err { background: #fde8e8; color: #b91c1c; }
+  a.track-link { color: var(--primary); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Submit Your Purchase</h1>
+  <div class="subtitle">Select what you bought, attach your bill, and submit for reward review.</div>
+</div>
+
+<div id="resultBanner" class="result-banner"></div>
+
+<div class="card">
+  <label for="dealerSearch">Hardware Store / Dealer</label>
+  <input type="text" id="dealerSearch" placeholder="Search dealer name..." />
+  <select id="dealerSelect" style="margin-top:8px;"></select>
+</div>
+
+<div class="card">
+  <label>Purchased Products</label>
+  <div id="productList"></div>
+</div>
+
+<div class="card">
+  <label>Attach Bill Image</label>
+  <div class="upload-box" id="uploadBox">
+    📷 Tap to take a photo or upload your bill
+    <input type="file" id="billFileInput" accept="image/*" capture="environment" />
+  </div>
+  <div id="fileNameLabel" style="margin-top:6px;font-size:0.85rem;color:var(--muted);"></div>
+</div>
+
+<div class="card">
+  <label>Automated Telemetry Status</label>
+  <div class="telemetry-line">
+    <span>📍 Location</span>
+    <span id="gpsStatus" class="status-pending">Requesting…</span>
+  </div>
+  <div class="telemetry-line">
+    <span>🕒 Time</span>
+    <span id="timeStatus" class="status-ok"></span>
+  </div>
+  <div class="telemetry-line">
+    <span>📱 Device</span>
+    <span id="deviceStatus" class="status-ok">Captured</span>
+  </div>
+</div>
+
+<div class="card">
+  <label for="mobileInput">Your Mobile Number</label>
+  <input type="text" id="mobileInput" placeholder="+94 7X XXX XXXX" />
+</div>
+
+<button class="submit-btn" id="submitBtn" disabled>Submit Claim &amp; Get Tracking ID</button>
+
+<p style="text-align:center;margin-top:14px;">
+  <a class="track-link" href="/track.html">Already submitted? Track your claim →</a>
+</p>
+
+<script src="/config.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

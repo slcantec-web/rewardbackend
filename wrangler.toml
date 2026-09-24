@@ -1,0 +1,29 @@
+name = "reward-system-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ---- D1 Database ----
+[[d1_databases]]
+binding = "DB"
+database_name = "reward-system-db"
+database_id = "92e2dd9a-5241-4094-a1f5-3d381c3d8e1e"
+
+# ---- R2 Bucket (bill images) ----
+[[r2_buckets]]
+binding = "BILL_IMAGES"
+bucket_name = "reward-system-bill-images"
+
+# ---- Environment variables ----
+[vars]
+GEOFENCE_RADIUS_KM = "5"
+VELOCITY_MAX_SUBMISSIONS = "3"
+VELOCITY_WINDOW_MINUTES = "10"
+WALLET_PAYOUT_THRESHOLD_LKR = "1000"
+
+# ---- Secrets (set via `wrangler secret put`) ----
+# FINANCE_JWT_SECRET
+# ADMIN_JWT_SECRET
+
+[observability]
+enabled = true

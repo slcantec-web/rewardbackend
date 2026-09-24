@@ -1,0 +1,9 @@
+{
+  "name": "Reward Claim Portal",
+  "short_name": "Rewards",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#f5f7f6",
+  "theme_color": "#1a6b3c",
+  "icons": []
+}

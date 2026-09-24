@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Admin Panel</title>
+<style>
+  :root { --primary: #1a6b3c; --danger: #b91c1c; --bg: #f3f4f6; --card: #fff; --border: #e2e5e4; --muted: #6b7280; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--card); padding: 0 20px; }
+  .tab { padding: 14px 18px; cursor: pointer; color: var(--muted); font-weight: 600; border-bottom: 3px solid transparent; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .content { padding: 20px; max-width: 900px; margin: 0 auto; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .panel h3 { margin: 0 0 12px; font-size: 1rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #f0f0f0; font-size: 0.9rem; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+  .role-badge { padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: #eef2ff; color: #3730a3; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .status-dot.active { background: #16a34a; } .status-dot.inactive { background: #9ca3af; }
+  .row-actions a { font-size: 0.8rem; color: var(--primary); cursor: pointer; margin-right: 10px; text-decoration: none; }
+  .row-actions a.danger { color: var(--danger); }
+  input, select { padding: 9px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; }
+  .form-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .form-row input, .form-row select { flex: 1; min-width: 140px; }
+  button { padding: 9px 16px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  button.secondary { background: #374151; }
+  #loginOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
+  #loginBox { background: #fff; padding: 24px; border-radius: 12px; width: 300px; }
+  #loginBox input { width: 100%; margin-bottom: 10px; }
+  #loginBox button { width: 100%; }
+  .msg { font-size: 0.85rem; margin-top: 6px; }
+  .msg.err { color: var(--danger); } .msg.ok { color: var(--primary); }
+</style>
+</head>
+<body>
+
+<div id="loginOverlay">
+  <div id="loginBox">
+    <h3>Admin Login</h3>
+    <input type="text" id="username" placeholder="Username" />
+    <input type="password" id="password" placeholder="Password" />
+    <button id="loginBtn">Sign In</button>
+    <div id="loginError" class="msg err"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <div class="tabs">
+    <div class="tab active" data-tab="staff">Staff Accounts</div>
+    <div class="tab" data-tab="customers">Customer Master</div>
+    <div class="tab" data-tab="items">Item Master</div>
+    <div class="tab" data-tab="rates">Payout Rates</div>
+    <div class="tab" data-tab="qr">QR / URL Assets</div>
+  </div>
+  <div class="content">
+    <div id="tab-staff"></div>
+    <div id="tab-customers" style="display:none;"></div>
+    <div id="tab-items" style="display:none;"></div>
+    <div id="tab-rates" style="display:none;"></div>
+    <div id="tab-qr" style="display:none;"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script src="/config.js"></script>
+<script>
+const API_BASE = window.API_BASE || "";
+let token = localStorage.getItem("adminToken") || null;
+let currentUsername = null;
+
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+  const res = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+  const data = await res.json();
+  if (!res.ok) { document.getElementById("loginError").textContent = data.error; return; }
+  if (data.role !== "admin") { document.getElementById("loginError").textContent = "This account does not have admin access."; return; }
+  token = data.token;
+  currentUsername = username;
+  localStorage.setItem("adminToken", token);
+  showApp();
+});
+
+function authHeaders() {
+  return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
+function showApp() {
+  document.getElementById("loginOverlay").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  loadStaff();
+  loadRates();
+  loadCustomers();
+  loadItems();
+}
+
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    ["staff", "customers", "items", "rates", "qr"].forEach(name => {
+      document.getElementById(`tab-${name}`).style.display = name === tab.dataset.tab ? "block" : "none";
+    });
+  });
+});
+
+// ============================================================
+// Staff Accounts
+// ============================================================
+async function loadStaff() {
+  const res = await fetch(`${API_BASE}/api/admin/staff`, { headers: authHeaders() });
+  if (res.status === 401) { localStorage.removeItem("adminToken"); location.reload(); return; }
+  const data = await res.json();
+  renderStaff(data.staff);
+}
+
+function renderStaff(staff) {
+  const rows = staff.map(s => `
+    <tr>
+      <td>${s.username}</td>
+      <td><span class="role-badge">${s.role.replace("_"," ")}</span></td>
+      <td><span class="status-dot ${s.active ? "active" : "inactive"}"></span>${s.active ? "Active" : "Inactive"}</td>
+      <td class="row-actions">
+        <a data-action="reset" data-user="${s.username}">Reset password</a>
+        <a data-action="role" data-user="${s.username}" data-current="${s.role}">Change role</a>
+        <a data-action="toggle" data-user="${s.username}" data-active="${s.active}" class="${s.active ? "danger" : ""}">
+          ${s.active ? "Deactivate" : "Activate"}
+        </a>
+      </td>
+    </tr>
+  `).join("");
+
+  document.getElementById("tab-staff").innerHTML = `
+    <div class="panel">
+      <h3>Create Staff Account</h3>
+      <div class="form-row">
+        <input type="text" id="newUsername" placeholder="Username" />
+        <input type="password" id="newPassword" placeholder="Password (min 8 chars)" />
+        <select id="newRole">
+          <option value="finance_staff">Finance Staff (Reviewer)</option>
+          <option value="finance_lead">Finance Lead (Disbursement)</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button id="createStaffBtn">Create</button>
+      </div>
+      <div id="createStaffMsg" class="msg"></div>
+    </div>
+    <div class="panel">
+      <h3>Existing Staff</h3>
+      <table>
+        <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" style="color:var(--muted);">No staff accounts yet.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+
+  document.getElementById("createStaffBtn").addEventListener("click", createStaff);
+  document.querySelectorAll('[data-action="reset"]').forEach(el => el.addEventListener("click", () => resetPassword(el.dataset.user)));
+  document.querySelectorAll('[data-action="role"]').forEach(el => el.addEventListener("click", () => changeRole(el.dataset.user, el.dataset.current)));
+  document.querySelectorAll('[data-action="toggle"]').forEach(el => el.addEventListener("click", () => toggleActive(el.dataset.user, el.dataset.active === "true")));
+}
+
+async function createStaff() {
+  const username = document.getElementById("newUsername").value.trim();
+  const password = document.getElementById("newPassword").value;
+  const role = document.getElementById("newRole").value;
+  const msg = document.getElementById("createStaffMsg");
+
+  const res = await fetch(`${API_BASE}/api/admin/staff`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ username, password, role })
+  });
+  const data = await res.json();
+  if (!res.ok) { msg.className = "msg err"; msg.textContent = data.error; return; }
+  msg.className = "msg ok"; msg.textContent = "Staff account created.";
+  loadStaff();
+}
+
+async function resetPassword(username) {
+  const password = prompt(`New password for ${username} (min 8 characters):`);
+  if (!password) return;
+  const res = await fetch(`${API_BASE}/api/admin/staff/${encodeURIComponent(username)}/reset-password`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ password })
+  });
+  const data = await res.json();
+  alert(res.ok ? "Password reset." : data.error);
+}
+
+async function changeRole(username, currentRole) {
+  const role = prompt(`New role for ${username} (admin / finance_staff / finance_lead):`, currentRole);
+  if (!role || role === currentRole) return;
+  const res = await fetch(`${API_BASE}/api/admin/staff/${encodeURIComponent(username)}/role`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ role })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error); return; }
+  loadStaff();
+}
+
+async function toggleActive(username, isActive) {
+  if (!confirm(`${isActive ? "Deactivate" : "Activate"} ${username}?`)) return;
+  const res = await fetch(`${API_BASE}/api/admin/staff/${encodeURIComponent(username)}/active`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ active: !isActive })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error); return; }
+  loadStaff();
+}
+
+// ============================================================
+// Customer Master (B2B Dealers)
+// ============================================================
+async function loadCustomers() {
+  const res = await fetch(`${API_BASE}/api/admin/dealers`, { headers: authHeaders() });
+  const data = await res.json();
+  renderCustomers(data.dealers || []);
+}
+
+function renderCustomers(dealers) {
+  const rows = dealers.map(d => `
+    <tr>
+      <td>${d.customer_code || "—"}</td>
+      <td>${d.name}</td>
+      <td>${d.contact_phone || "—"}</td>
+      <td>${d.city || "—"}</td>
+      <td><span class="status-dot ${d.active ? "active" : "inactive"}"></span>${d.active ? "Active" : "Inactive"}</td>
+      <td class="row-actions">
+        <a onclick='editCustomer(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Edit</a>
+        ${d.active ? `<a class="danger" onclick="deleteCustomer('${d.id}')">Delete</a>` : ""}
+      </td>
+    </tr>
+  `).join("");
+
+  document.getElementById("tab-customers").innerHTML = `
+    <div class="panel">
+      <h3>Add / Bulk Upload B2B Customers</h3>
+      <div class="form-row">
+        <input type="text" id="custCode" placeholder="Customer Code" />
+        <input type="text" id="custName" placeholder="Customer / Dealer Name" />
+        <input type="text" id="custPhone" placeholder="Contact Phone" />
+      </div>
+      <div class="form-row">
+        <input type="text" id="custAddress" placeholder="Address" />
+        <input type="text" id="custCity" placeholder="City" />
+        <input type="text" id="custLat" placeholder="Latitude (for geofencing)" />
+        <input type="text" id="custLng" placeholder="Longitude (for geofencing)" />
+      </div>
+      <div class="form-row">
+        <button onclick="createCustomer()">Add Customer</button>
+        <label class="secondary" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#374151;color:#fff;border-radius:8px;cursor:pointer;">
+          Upload Excel (.xlsx)
+          <input type="file" id="custExcelInput" accept=".xlsx,.xls,.csv" style="display:none;" />
+        </label>
+      </div>
+      <div id="custMsg" class="msg"></div>
+      <p style="color:var(--muted);font-size:0.85rem;">
+        Excel columns (header row required): <code>customerCode, name, contactPhone, address, city, latitude, longitude</code>.
+        Matches existing customers by <code>customerCode</code> and updates them; new codes are created.
+      </p>
+    </div>
+    <div class="panel">
+      <h3>Customer Master (${dealers.length})</h3>
+      <table>
+        <thead><tr><th>Code</th><th>Name</th><th>Phone</th><th>City</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" style="color:var(--muted);">No customers yet.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+
+  document.getElementById("custExcelInput").addEventListener("change", (e) => handleBulkUpload(e, "dealers"));
+}
+
+async function createCustomer() {
+  const body = {
+    customerCode: document.getElementById("custCode").value.trim() || undefined,
+    name: document.getElementById("custName").value.trim(),
+    contactPhone: document.getElementById("custPhone").value.trim() || undefined,
+    address: document.getElementById("custAddress").value.trim() || undefined,
+    city: document.getElementById("custCity").value.trim() || undefined,
+    latitude: parseFloat(document.getElementById("custLat").value) || undefined,
+    longitude: parseFloat(document.getElementById("custLng").value) || undefined,
+  };
+  const msg = document.getElementById("custMsg");
+  if (!body.name) { msg.className = "msg err"; msg.textContent = "Customer name is required."; return; }
+
+  const res = await fetch(`${API_BASE}/api/admin/dealers`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) { msg.className = "msg err"; msg.textContent = data.error; return; }
+  msg.className = "msg ok"; msg.textContent = "Customer added.";
+  loadCustomers();
+}
+
+function editCustomer(dealer) {
+  const name = prompt("Customer name:", dealer.name);
+  if (name === null) return;
+  const contactPhone = prompt("Contact phone:", dealer.contact_phone || "");
+  const city = prompt("City:", dealer.city || "");
+  fetch(`${API_BASE}/api/admin/dealers/${dealer.id}`, {
+    method: "PATCH", headers: authHeaders(), body: JSON.stringify({ name, contactPhone, city })
+  }).then(() => loadCustomers());
+}
+
+async function deleteCustomer(id) {
+  if (!confirm("Deactivate this customer? Historical submissions are kept.")) return;
+  await fetch(`${API_BASE}/api/admin/dealers/${id}`, { method: "DELETE", headers: authHeaders() });
+  loadCustomers();
+}
+
+// ============================================================
+// Item Master (Products)
+// ============================================================
+async function loadItems() {
+  const res = await fetch(`${API_BASE}/api/admin/products`, { headers: authHeaders() });
+  const data = await res.json();
+  renderItems(data.products || []);
+}
+
+function renderItems(products) {
+  const rows = products.map(p => `
+    <tr>
+      <td>${p.id}</td>
+      <td>${p.name}</td>
+      <td>${p.unit_label}</td>
+      <td>LKR ${p.current_rate ?? 0}</td>
+      <td><span class="status-dot ${p.active ? "active" : "inactive"}"></span>${p.active ? "Active" : "Inactive"}</td>
+      <td class="row-actions">
+        <a onclick='editItem(${JSON.stringify(p).replace(/'/g, "&apos;")})'>Edit</a>
+        ${p.active ? `<a class="danger" onclick="deleteItem('${p.id}')">Delete</a>` : ""}
+      </td>
+    </tr>
+  `).join("");
+
+  document.getElementById("tab-items").innerHTML = `
+    <div class="panel">
+      <h3>Add / Bulk Upload Items</h3>
+      <div class="form-row">
+        <input type="text" id="itemCode" placeholder="Item Code" />
+        <input type="text" id="itemName" placeholder="Item Name (e.g. Wall Putty 25kg)" />
+        <input type="text" id="itemUnit" placeholder="Unit Label (default: bag)" />
+        <input type="number" step="0.01" id="itemRate" placeholder="Reward Rate (LKR)" />
+      </div>
+      <div class="form-row">
+        <button onclick="createItem()">Add Item</button>
+        <label class="secondary" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#374151;color:#fff;border-radius:8px;cursor:pointer;">
+          Upload Excel (.xlsx)
+          <input type="file" id="itemExcelInput" accept=".xlsx,.xls,.csv" style="display:none;" />
+        </label>
+      </div>
+      <div id="itemMsg" class="msg"></div>
+      <p style="color:var(--muted);font-size:0.85rem;">
+        Excel columns (header row required): <code>itemCode, name, unitLabel, rate</code>.
+        Matches existing items by <code>itemCode</code> and updates them (including rate, if changed); new codes are created.
+      </p>
+    </div>
+    <div class="panel">
+      <h3>Item Master (${products.length})</h3>
+      <table>
+        <thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Current Rate</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" style="color:var(--muted);">No items yet.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+
+  document.getElementById("itemExcelInput").addEventListener("change", (e) => handleBulkUpload(e, "items"));
+}
+
+async function createItem() {
+  const body = {
+    itemCode: document.getElementById("itemCode").value.trim() || undefined,
+    name: document.getElementById("itemName").value.trim(),
+    unitLabel: document.getElementById("itemUnit").value.trim() || undefined,
+    rate: parseFloat(document.getElementById("itemRate").value) || undefined,
+  };
+  const msg = document.getElementById("itemMsg");
+  if (!body.name) { msg.className = "msg err"; msg.textContent = "Item name is required."; return; }
+
+  const res = await fetch(`${API_BASE}/api/admin/items`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) { msg.className = "msg err"; msg.textContent = data.error; return; }
+  msg.className = "msg ok"; msg.textContent = "Item added.";
+  loadItems();
+  loadRates();
+}
+
+function editItem(product) {
+  const name = prompt("Item name:", product.name);
+  if (name === null) return;
+  const unitLabel = prompt("Unit label:", product.unit_label);
+  fetch(`${API_BASE}/api/admin/items/${product.id}`, {
+    method: "PATCH", headers: authHeaders(), body: JSON.stringify({ name, unitLabel })
+  }).then(() => { loadItems(); loadRates(); });
+}
+
+async function deleteItem(id) {
+  if (!confirm("Deactivate this item? Historical submissions are kept.")) return;
+  await fetch(`${API_BASE}/api/admin/items/${id}`, { method: "DELETE", headers: authHeaders() });
+  loadItems();
+  loadRates();
+}
+
+// ============================================================
+// Excel bulk upload (shared: dealers | items)
+// ============================================================
+function handleBulkUpload(event, kind) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const workbook = XLSX.read(e.target.result, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+    const rows = kind === "dealers"
+      ? raw.map(r => ({
+          customerCode: String(r.customerCode || r.CustomerCode || "").trim(),
+          name: String(r.name || r.Name || "").trim(),
+          contactPhone: String(r.contactPhone || r.ContactPhone || "").trim() || undefined,
+          address: String(r.address || r.Address || "").trim() || undefined,
+          city: String(r.city || r.City || "").trim() || undefined,
+          latitude: parseFloat(r.latitude || r.Latitude) || undefined,
+          longitude: parseFloat(r.longitude || r.Longitude) || undefined,
+        }))
+      : raw.map(r => ({
+          itemCode: String(r.itemCode || r.ItemCode || "").trim(),
+          name: String(r.name || r.Name || "").trim(),
+          unitLabel: String(r.unitLabel || r.UnitLabel || "").trim() || undefined,
+          rate: r.rate !== undefined && r.rate !== "" ? parseFloat(r.rate || r.Rate) : undefined,
+        }));
+
+    const endpoint = kind === "dealers" ? "/api/admin/dealers/bulk" : "/api/admin/items/bulk";
+    const msgEl = document.getElementById(kind === "dealers" ? "custMsg" : "itemMsg");
+    msgEl.className = "msg"; msgEl.textContent = `Uploading ${rows.length} rows…`;
+
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method: "POST", headers: authHeaders(), body: JSON.stringify({ rows })
+    });
+    const data = await res.json();
+    if (!res.ok) { msgEl.className = "msg err"; msgEl.textContent = data.error || "Upload failed."; return; }
+
+    msgEl.className = data.errors?.length ? "msg err" : "msg ok";
+    msgEl.textContent = `Created ${data.created}, updated ${data.updated}` +
+      (data.errors?.length ? `, ${data.errors.length} row(s) skipped — see console.` : ".");
+    if (data.errors?.length) console.warn("Bulk upload row errors:", data.errors);
+
+    if (kind === "dealers") loadCustomers(); else { loadItems(); loadRates(); }
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value = ""; // allow re-selecting the same file later
+}
+
+// ============================================================
+// Payout Rates
+// ============================================================
+async function loadRates() {
+  const res = await fetch(`${API_BASE}/api/admin/products`, { headers: authHeaders() });
+  const data = await res.json();
+  const rows = (data.products || []).map(p => `
+    <tr>
+      <td>${p.name}</td>
+      <td>LKR ${p.current_rate ?? 0} / ${p.unit_label}</td>
+      <td>
+        <input type="number" step="0.01" id="rate-${p.id}" placeholder="New rate" style="width:110px;" />
+        <button class="secondary" data-product="${p.id}" onclick="updateRate('${p.id}')">Update</button>
+      </td>
+    </tr>
+  `).join("");
+  document.getElementById("tab-rates").innerHTML = `
+    <div class="panel">
+      <h3>Reward Payout Rates</h3>
+      <table>
+        <thead><tr><th>Product</th><th>Current Rate</th><th>Update</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function updateRate(productId) {
+  const input = document.getElementById(`rate-${productId}`);
+  const rate = parseFloat(input.value);
+  if (isNaN(rate) || rate < 0) { alert("Enter a valid rate."); return; }
+  const res = await fetch(`${API_BASE}/api/admin/products/${productId}/rate`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ rate })
+  });
+  if (res.ok) loadRates(); else alert("Failed to update rate.");
+}
+
+// ============================================================
+// QR / URL Assets
+// ============================================================
+document.getElementById("tab-qr").innerHTML = `
+  <div class="panel">
+    <h3>Generate Common Access QR / URL Asset</h3>
+    <div class="form-row">
+      <select id="qrType">
+        <option value="upload">Upload Portal QR</option>
+        <option value="track">Tracking Portal QR</option>
+      </select>
+      <input type="text" id="qrTargetUrl" placeholder="Target URL, e.g. https://rewards.company.com/upload" />
+      <select id="qrFormat">
+        <option value="svg">SVG (factory print)</option>
+        <option value="pdf">PDF (factory print)</option>
+        <option value="png">PNG (marketing/dealer)</option>
+      </select>
+      <button onclick="generateQr()">Request Asset</button>
+    </div>
+    <div id="qrMsg" class="msg"></div>
+    <p style="color:var(--muted);font-size:0.85rem;">
+      This logs the export request and returns an asset ID for the audit trail.
+      Rendering the actual vector file (Level-H error correction) is a follow-up
+      wiring step noted in the project README.
+    </p>
+  </div>
+`;
+
+async function generateQr() {
+  const assetType = document.getElementById("qrType").value;
+  const targetUrl = document.getElementById("qrTargetUrl").value.trim();
+  const format = document.getElementById("qrFormat").value;
+  const msg = document.getElementById("qrMsg");
+  if (!targetUrl) { msg.className = "msg err"; msg.textContent = "Enter a target URL."; return; }
+
+  const res = await fetch(`${API_BASE}/api/admin/qr-assets`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ assetType, targetUrl, format })
+  });
+  const data = await res.json();
+  msg.className = res.ok ? "msg ok" : "msg err";
+  msg.textContent = res.ok ? `Asset request logged (ID ${data.assetId}).` : data.error;
+}
+
+if (token) showApp();
+</script>
+</body>
+</html>

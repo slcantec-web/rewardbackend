@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Track Your Claim</title>
+<style>
+  :root { --primary: #1a6b3c; --bg: #f5f7f6; --card: #fff; --border: #e2e5e4; --muted: #6b7280; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  h1 { font-size: 1.3rem; margin: 0 0 12px; }
+  input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; font-size: 1rem; }
+  button { width: 100%; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  .status-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.85rem; font-weight: 600; }
+  .status-PENDING, .status-IN_REVIEW { background: #fef3c7; color: #92400e; }
+  .status-APPROVED { background: #dcfce7; color: #166534; }
+  .status-REJECTED { background: #fee2e2; color: #991b1b; }
+  .item-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+  .progress-track { background: #e5e7eb; border-radius: 999px; height: 10px; overflow: hidden; margin-top: 6px; }
+  .progress-fill { background: var(--primary); height: 100%; }
+  .muted { color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Track Your Claim</h1>
+  <input type="text" id="mobileInput" placeholder="Mobile Number" />
+  <input type="text" id="submissionIdInput" placeholder="Submission ID (e.g. SUB-2026-89412)" />
+  <button id="trackBtn">Check Status</button>
+</div>
+
+<div id="resultCard" style="display:none;"></div>
+
+<script src="/config.js"></script>
+<script>
+document.getElementById("trackBtn").addEventListener("click", async () => {
+  const mobile = document.getElementById("mobileInput").value.trim();
+  const submissionId = document.getElementById("submissionIdInput").value.trim();
+  const resultCard = document.getElementById("resultCard");
+  if (!mobile || !submissionId) return;
+
+  const res = await fetch(`${window.API_BASE || ""}/api/track?mobile=${encodeURIComponent(mobile)}&submissionId=${encodeURIComponent(submissionId)}`);
+  const data = await res.json();
+
+  resultCard.style.display = "block";
+  if (!res.ok) {
+    resultCard.innerHTML = `<div class="card">⚠️ ${data.error || "Claim not found"}</div>`;
+    return;
+  }
+
+  const s = data.submission;
+  const itemsHtml = data.items.map(i =>
+    `<div class="item-row"><span>${i.name}</span><span>Claimed: ${i.claimed_qty}${i.verified_qty != null ? " | Verified: " + i.verified_qty : ""}</span></div>`
+  ).join("");
+
+  const threshold = 1000;
+  const pct = Math.min(100, Math.round((data.wallet.balance_lkr / threshold) * 100));
+
+  resultCard.innerHTML = `
+    <div class="card">
+      <div class="muted">Submission ID</div>
+      <div><b>${s.id}</b></div>
+      <div class="muted" style="margin-top:8px;">Status</div>
+      <span class="status-badge status-${s.status}">${s.status.replace("_"," ")}</span>
+    </div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:6px;">Submitted Items</div>
+      ${itemsHtml}
+    </div>
+    <div class="card">
+      <div class="muted">Wallet Balance</div>
+      <div style="font-size:1.4rem;font-weight:700;">${data.wallet.balance_lkr.toFixed(2)} LKR</div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="muted" style="margin-top:4px;">${pct}% to ${threshold} LKR minimum withdrawal</div>
+    </div>
+  `;
+});
+</script>
+</body>
+</html>

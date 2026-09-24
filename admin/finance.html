@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Finance Review Dashboard</title>
+<style>
+  :root { --primary: #1a6b3c; --danger: #b91c1c; --bg: #f3f4f6; --card: #fff; --border: #e2e5e4; --muted: #6b7280; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; }
+  .layout { display: flex; height: 100vh; }
+  .sidebar { width: 340px; border-right: 1px solid var(--border); background: var(--card); overflow-y: auto; }
+  .main { flex: 1; overflow-y: auto; padding: 20px; }
+  .queue-item { padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .queue-item:hover { background: #f9fafb; }
+  .queue-item.active { background: #eef7f0; border-left: 3px solid var(--primary); }
+  .queue-item .sub-id { font-weight: 600; }
+  .queue-item .meta { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+  .risk-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+  .risk-low { background: #dcfce7; color: #166534; }
+  .risk-med { background: #fef3c7; color: #92400e; }
+  .risk-high { background: #fee2e2; color: #991b1b; }
+  .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .panel h3 { margin: 0 0 10px; font-size: 1rem; }
+  #billImage { width: 100%; border-radius: 8px; border: 1px solid var(--border); }
+  .metric-row { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 5px 0; border-bottom: 1px solid #f0f0f0; }
+  .flag-chip { display: inline-block; background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; margin: 2px 4px 2px 0; }
+  .item-line { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+  .item-line input { width: 70px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; }
+  .total-line { display: flex; justify-content: space-between; font-weight: 700; font-size: 1.1rem; margin-top: 10px; }
+  .actions { display: flex; gap: 10px; margin-top: 14px; }
+  .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  .btn-approve { background: var(--primary); color: #fff; }
+  .btn-reject { background: var(--danger); color: #fff; }
+  .btn-save { background: #374151; color: #fff; }
+  #loginOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
+  #loginBox { background: #fff; padding: 24px; border-radius: 12px; width: 300px; }
+  #loginBox input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; }
+  #loginBox button { width: 100%; padding: 10px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+  select#rejectionCode { width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<div id="loginOverlay">
+  <div id="loginBox">
+    <h3>Finance Login</h3>
+    <input type="text" id="username" placeholder="Username" />
+    <input type="password" id="password" placeholder="Password" />
+    <button id="loginBtn">Sign In</button>
+    <div id="loginError" style="color:red;font-size:0.85rem;margin-top:6px;"></div>
+  </div>
+</div>
+
+<div class="layout" style="display:none;" id="mainLayout">
+  <div class="sidebar" id="queueList"></div>
+  <div class="main" id="reviewPanel">
+    <div class="panel">Select a submission from the queue to begin review.</div>
+  </div>
+</div>
+
+<script src="/config.js"></script>
+<script>
+const API_BASE = window.API_BASE || "";
+let token = localStorage.getItem("financeToken") || null;
+let currentId = null;
+
+// ---- Login ----
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+  const res = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+  const data = await res.json();
+  if (!res.ok) { document.getElementById("loginError").textContent = data.error; return; }
+  token = data.token;
+  localStorage.setItem("financeToken", token);
+  showApp();
+});
+
+function showApp() {
+  document.getElementById("loginOverlay").style.display = "none";
+  document.getElementById("mainLayout").style.display = "flex";
+  loadQueue();
+}
+
+function authHeaders() {
+  return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
+async function loadQueue() {
+  const res = await fetch(`${API_BASE}/api/finance/queue?status=PENDING`, { headers: authHeaders() });
+  if (res.status === 401) { localStorage.removeItem("financeToken"); location.reload(); return; }
+  const data = await res.json();
+  const list = document.getElementById("queueList");
+  list.innerHTML = data.submissions.map(s => {
+    const riskClass = s.risk_score >= 60 ? "risk-high" : s.risk_score >= 25 ? "risk-med" : "risk-low";
+    return `
+      <div class="queue-item" data-id="${s.id}">
+        <div class="sub-id">${s.id}</div>
+        <div class="meta">${s.dealer_name || "Unknown dealer"} · ${s.mobile_number}</div>
+        <div class="meta">${new Date(s.created_at_server).toLocaleString()}</div>
+        <span class="risk-badge ${riskClass}">Risk ${s.risk_score}</span>
+      </div>`;
+  }).join("") || `<div style="padding:16px;color:var(--muted);">Queue is empty.</div>`;
+
+  list.querySelectorAll(".queue-item").forEach(el => {
+    el.addEventListener("click", () => {
+      list.querySelectorAll(".queue-item").forEach(x => x.classList.remove("active"));
+      el.classList.add("active");
+      loadSubmission(el.dataset.id);
+    });
+  });
+}
+
+async function loadSubmission(id) {
+  currentId = id;
+  const res = await fetch(`${API_BASE}/api/finance/submissions/${id}`, { headers: authHeaders() });
+  const data = await res.json();
+  renderReview(data);
+  loadBillImage(id);
+}
+
+async function loadBillImage(id) {
+  // <img src> can't carry an Authorization header, so fetch the bytes
+  // ourselves and hand the element a local object URL.
+  const res = await fetch(`${API_BASE}/api/finance/submissions/${id}/image`, { headers: authHeaders() });
+  if (!res.ok) return;
+  const blob = await res.blob();
+  const img = document.getElementById("billImage");
+  if (img) img.src = URL.createObjectURL(blob);
+}
+
+function renderReview(data) {
+  const s = data.submission;
+  const flags = (s.fraud_flags || "").split(",").filter(Boolean);
+  const riskClass = s.risk_score >= 60 ? "risk-high" : s.risk_score >= 25 ? "risk-med" : "risk-low";
+
+  const itemRows = data.items.map(i => `
+    <div class="item-line">
+      <span>${i.name}</span>
+      <span style="color:var(--muted);font-size:0.85rem;">Claimed: ${i.claimed_qty}</span>
+      <input type="number" min="0" value="${i.verified_qty ?? i.claimed_qty}" data-item-id="${i.id}" data-rate="${i.rate_lkr_snapshot}" class="verified-qty-input" />
+    </div>
+  `).join("");
+
+  document.getElementById("reviewPanel").innerHTML = `
+    <div class="review-grid">
+      <div>
+        <div class="panel">
+          <h3>Uploaded Invoice — ${s.id}</h3>
+          <img id="billImage" alt="Bill" />
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h3>Telemetry &amp; Anti-Fraud Card</h3>
+          <div class="metric-row"><span>Customer Mobile</span><span>${s.mobile_number}</span></div>
+          <div class="metric-row"><span>Dealer</span><span>${s.dealer_name || "Unknown"}</span></div>
+          <div class="metric-row"><span>Dealer Distance</span><span>${s.dealer_distance_km != null ? s.dealer_distance_km.toFixed(2) + " km" : "N/A"}</span></div>
+          <div class="metric-row"><span>Time Delta</span><span>${Math.round(s.time_delta_seconds || 0)}s</span></div>
+          <div class="metric-row"><span>Risk Score</span><span class="risk-badge ${riskClass}">${s.risk_score}/100</span></div>
+          <div style="margin-top:8px;">${flags.map(f => `<span class="flag-chip">${f}</span>`).join("") || '<span style="color:var(--muted);font-size:0.85rem;">No flags</span>'}</div>
+        </div>
+        <div class="panel">
+          <h3>Item Verification &amp; Reward</h3>
+          ${itemRows}
+          <div class="total-line"><span>Total</span><span id="calcTotal">—</span></div>
+          <button class="btn btn-save" id="saveQtyBtn" style="width:100%;margin-top:10px;">Save Verified Quantities</button>
+        </div>
+        <div class="panel">
+          <select id="rejectionCode">
+            <option value="">Select rejection reason (if rejecting)</option>
+            <option value="ILLEGIBLE_BILL">Illegible bill image</option>
+            <option value="QTY_MISMATCH">Quantity mismatch</option>
+            <option value="GEOGRAPHIC_MISMATCH">Geographic mismatch</option>
+            <option value="DUPLICATE_BILL_IMAGE">Duplicate bill image</option>
+            <option value="OTHER">Other</option>
+          </select>
+          <div class="actions">
+            <button class="btn btn-approve" id="approveBtn">Approve &amp; Credit</button>
+            <button class="btn btn-reject" id="rejectBtn">Reject Claim</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  recalcTotal();
+  document.querySelectorAll(".verified-qty-input").forEach(inp => inp.addEventListener("input", recalcTotal));
+  document.getElementById("saveQtyBtn").addEventListener("click", saveVerifiedQuantities);
+  document.getElementById("approveBtn").addEventListener("click", approveSubmission);
+  document.getElementById("rejectBtn").addEventListener("click", rejectSubmission);
+}
+
+function recalcTotal() {
+  let total = 0;
+  document.querySelectorAll(".verified-qty-input").forEach(inp => {
+    total += (parseFloat(inp.value) || 0) * parseFloat(inp.dataset.rate);
+  });
+  document.getElementById("calcTotal").textContent = `LKR ${total.toFixed(2)}`;
+}
+
+function collectItems() {
+  return [...document.querySelectorAll(".verified-qty-input")].map(inp => ({
+    itemId: parseInt(inp.dataset.itemId, 10),
+    verifiedQty: parseInt(inp.value, 10) || 0
+  }));
+}
+
+async function saveVerifiedQuantities() {
+  await fetch(`${API_BASE}/api/finance/submissions/${currentId}/verify`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ items: collectItems() })
+  });
+  alert("Verified quantities saved.");
+}
+
+async function approveSubmission() {
+  await saveVerifiedQuantities();
+  const res = await fetch(`${API_BASE}/api/finance/submissions/${currentId}/approve`, {
+    method: "POST", headers: authHeaders()
+  });
+  const data = await res.json();
+  alert(`Approved. Total credited: LKR ${data.totalApproved?.toFixed(2)}`);
+  loadQueue();
+  document.getElementById("reviewPanel").innerHTML = `<div class="panel">Select a submission from the queue to begin review.</div>`;
+}
+
+async function rejectSubmission() {
+  const rejectionCode = document.getElementById("rejectionCode").value;
+  if (!rejectionCode) { alert("Please select a rejection reason."); return; }
+  await fetch(`${API_BASE}/api/finance/submissions/${currentId}/reject`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ rejectionCode })
+  });
+  loadQueue();
+  document.getElementById("reviewPanel").innerHTML = `<div class="panel">Select a submission from the queue to begin review.</div>`;
+}
+
+if (token) showApp();
+</script>
+</body>
+</html>
