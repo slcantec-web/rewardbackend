@@ -233,9 +233,9 @@ app.get("/api/top-customers", async (c) => {
   const session = await getAnySession(c);
   if (!requireRole(session, ["admin", "finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
 
-  const limit = Math.min(20, parseInt(c.req.query("limit") || "10", 10));
-  const { results } = await c.env.DB.prepare(
-    `SELECT s.mobile_number, d.name as dealer_name, COUNT(*) as submission_count,
+  const limit = Math.min(50, parseInt(c.req.query("limit") || "10", 10));
+  const { results: topCustomers } = await c.env.DB.prepare(
+    `SELECT s.mobile_number, COALESCE(d.name, 'Direct Customer') as dealer_name, COUNT(*) as submission_count,
             SUM(CASE WHEN s.status = 'APPROVED' THEN s.total_approved_reward_lkr ELSE 0 END) as total_approved_lkr,
             MAX(s.created_at_server) as last_submission
      FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id
@@ -246,7 +246,41 @@ app.get("/api/top-customers", async (c) => {
     .bind(limit)
     .all();
 
-  return c.json({ customers: results });
+  const totalDealersRow = await c.env.DB.prepare(`SELECT COUNT(*) as count FROM dealers WHERE active = 1`).first<{ count: number }>();
+  const totalSubmissionsRow = await c.env.DB.prepare(`SELECT COUNT(*) as count FROM submissions`).first<{ count: number }>();
+  const totalApprovedRow = await c.env.DB.prepare(
+    `SELECT COALESCE(SUM(total_approved_reward_lkr), 0) as total FROM submissions WHERE status = 'APPROVED'`
+  ).first<{ total: number }>();
+  const totalPendingRow = await c.env.DB.prepare(
+    `SELECT COALESCE(SUM(total_claimed_reward_lkr), 0) as total FROM submissions WHERE status IN ('PENDING', 'IN_REVIEW')`
+  ).first<{ total: number }>();
+  const totalPaidRow = await c.env.DB.prepare(
+    `SELECT COALESCE(SUM(amount_lkr), 0) as total FROM payouts WHERE status = 'PAID'`
+  ).first<{ total: number }>();
+  const pendingPayoutsRow = await c.env.DB.prepare(
+    `SELECT COUNT(*) as count, COALESCE(SUM(amount_lkr), 0) as total FROM payouts WHERE status = 'PENDING'`
+  ).first<{ count: number; total: number }>();
+
+  const { results: recentDealers } = await c.env.DB.prepare(
+    `SELECT id, customer_code, name, contact_phone, city, active, created_at
+     FROM dealers
+     ORDER BY created_at DESC
+     LIMIT 10`
+  ).all();
+
+  return c.json({
+    customers: topCustomers || [],
+    recentDealers: recentDealers || [],
+    stats: {
+      totalDealers: totalDealersRow?.count ?? 0,
+      totalSubmissions: totalSubmissionsRow?.count ?? 0,
+      totalApprovedLkr: totalApprovedRow?.total ?? 0,
+      totalPendingLkr: totalPendingRow?.total ?? 0,
+      totalPaidLkr: totalPaidRow?.total ?? 0,
+      pendingPayoutsCount: pendingPayoutsRow?.count ?? 0,
+      pendingPayoutsLkr: pendingPayoutsRow?.total ?? 0,
+    }
+  });
 });
 
 // ============================================================
@@ -280,8 +314,8 @@ app.post("/api/auth/login", async (c) => {
 // ============================================================
 
 app.get("/api/finance/submissions/:id/image", async (c) => {
-  const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
-  if (!requireRole(session, ["finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
+  const session = await getAnySession(c);
+  if (!requireRole(session, ["admin", "finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
 
   const id = c.req.param("id");
   const submission = await c.env.DB.prepare(`SELECT bill_image_key FROM submissions WHERE id = ?`)
@@ -296,8 +330,8 @@ app.get("/api/finance/submissions/:id/image", async (c) => {
 });
 
 app.post("/api/finance/submissions/:id/verify", async (c) => {
-  const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
-  if (!requireRole(session, ["finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
+  const session = await getAnySession(c);
+  if (!requireRole(session, ["admin", "finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
 
   const id = c.req.param("id");
   const { items } = await c.req.json<{ items: { itemId: number; verifiedQty: number }[] }>();
@@ -324,8 +358,8 @@ app.post("/api/finance/submissions/:id/verify", async (c) => {
 });
 
 app.post("/api/finance/submissions/:id/reject", async (c) => {
-  const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
-  if (!requireRole(session, ["finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
+  const session = await getAnySession(c);
+  if (!requireRole(session, ["admin", "finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
 
   const id = c.req.param("id");
   const { rejectionCode } = await c.req.json<{ rejectionCode: string }>();
@@ -346,12 +380,12 @@ app.post("/api/finance/submissions/:id/reject", async (c) => {
 });
 
 // ============================================================
-// Finance Lead: bind only (list + sync live in extras.ts)
+// Finance Lead / Admin: bind only (list + sync live in extras.ts)
 // ============================================================
 
 app.post("/api/finance-lead/payouts/:id/bind", async (c) => {
-  const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
-  if (!requireRole(session, ["finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
+  const session = await getAnySession(c);
+  if (!requireRole(session, ["admin", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
 
   const id = c.req.param("id");
   const { erpReference, bankReference } = await c.req.json<{ erpReference: string; bankReference: string }>();

@@ -10,16 +10,6 @@
 // file will route API calls there automatically.
 // ============================================================
 
-const WORKER_URL = "https://customereward.slcantec.workers.dev"; // <-- set this
+// API base resolution: use same-origin relative URLs in AI Studio
+window.API_BASE = "";
 
-window.API_BASE = (() => {
-  const host = window.location.hostname;
-  const onPagesDev = host.endsWith(".pages.dev");
-  const onLocalhost = host === "localhost" || host === "127.0.0.1";
-
-  if (onPagesDev || onLocalhost) {
-    return WORKER_URL;
-  }
-  // Same custom domain as the Worker route → same-origin, no prefix needed.
-  return "";
-})();

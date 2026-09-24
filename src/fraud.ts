@@ -1,4 +1,4 @@
-import type { Env, DeviceBlueprint, FraudEvaluation } from "./types";
+import type { Env, DeviceBlueprint, FraudEvaluation, D1Database } from "./types";
 
 /**
  * Haversine distance in km between two lat/lng points.
@@ -25,7 +25,7 @@ export async function perceptualHashFromBytes(bytes: Uint8Array): Promise<string
   // Cheap content hash (SHA-256) — catches *identical* re-uploads reliably.
   // Swap in a true pHash implementation for near-duplicate detection
   // (re-compressed / re-cropped versions of the same bill).
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const digest = await crypto.subtle.digest("SHA-256", bytes as any);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 

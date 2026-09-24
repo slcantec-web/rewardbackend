@@ -8,7 +8,7 @@
  * deleted from index.ts whenever convenient.
  */
 import type { Hono } from "hono";
-import type { Env } from "./types";
+import type { Env, D1Database } from "./types";
 import { verifySession, requireRole, type SessionPayload } from "./auth";
 
 type App = Hono<{ Bindings: Env }>;
@@ -30,17 +30,27 @@ async function sessionFrom(c: any, secret: string): Promise<SessionPayload | nul
 }
 
 async function financeSession(c: any, roles: Role[]) {
-  const s = await sessionFrom(c, c.env.FINANCE_JWT_SECRET);
-  return requireRole(s, roles) ? s : null;
+  // Check finance secret first
+  const sf = await sessionFrom(c, c.env.FINANCE_JWT_SECRET);
+  if (sf && (roles.includes(sf.role) || sf.role === "finance_lead")) return sf;
+
+  // Admin has superuser authority across all finance endpoints
+  const sa = await sessionFrom(c, c.env.ADMIN_JWT_SECRET);
+  if (sa && sa.role === "admin") return sa;
+
+  return null;
 }
 
 async function adminSession(c: any) {
-  const s = await sessionFrom(c, c.env.ADMIN_JWT_SECRET);
-  return requireRole(s, ["admin"]) ? s : null;
+  const sa = await sessionFrom(c, c.env.ADMIN_JWT_SECRET);
+  if (sa && sa.role === "admin") return sa;
+  const sf = await sessionFrom(c, c.env.FINANCE_JWT_SECRET);
+  if (sf && sf.role === "finance_lead") return sf;
+  return null;
 }
 
 async function anySession(c: any) {
-  return (await sessionFrom(c, c.env.FINANCE_JWT_SECRET)) ?? (await sessionFrom(c, c.env.ADMIN_JWT_SECRET));
+  return (await sessionFrom(c, c.env.ADMIN_JWT_SECRET)) ?? (await sessionFrom(c, c.env.FINANCE_JWT_SECRET));
 }
 
 const maskAccount = (n: string) => (n || "").replace(/.(?=.{4})/g, "•");
@@ -136,7 +146,26 @@ async function deviceActivity(db: D1Database, hash: string) {
 // Customer profile (used by Finance)
 // ============================================================
 
-async function customerProfile(db: D1Database, mobile: string, fullBank: boolean) {
+async function customerProfile(db: D1Database, mobileOrParam: string, fullBank: boolean) {
+  const param = (mobileOrParam || "").trim();
+
+  // Check dealer master first by contact_phone, id, customer_code, or exact name
+  const dealerMaster = await db
+    .prepare(
+      `SELECT id, customer_code, name, contact_phone, address, city, latitude, longitude, active, created_at
+       FROM dealers
+       WHERE contact_phone = ? OR id = ? OR customer_code = ? OR name = ?
+       LIMIT 1`
+    )
+    .bind(param, param, param, param)
+    .first<any>();
+
+  const dealerId = dealerMaster?.id || "";
+  const contactPhone = dealerMaster?.contact_phone || "";
+  const searchPhone = contactPhone || (param.startsWith("DLR-") ? "" : param);
+  const effectiveKey = searchPhone || dealerId || param;
+
+  // Submissions associated with this dealer OR this mobile phone
   const stats = await db
     .prepare(
       `SELECT COUNT(*) AS total,
@@ -148,60 +177,85 @@ async function customerProfile(db: D1Database, mobile: string, fullBank: boolean
               COALESCE(MAX(risk_score), 0) AS max_risk,
               MIN(created_at_server) AS first_claim,
               MAX(created_at_server) AS last_claim
-       FROM submissions WHERE mobile_number = ?`
+       FROM submissions
+       WHERE (dealer_id = ? AND ? != '') OR (mobile_number = ? AND ? != '')`
     )
-    .bind(mobile)
+    .bind(dealerId, dealerId, searchPhone, searchPhone)
     .first<any>();
 
+  // Wallet lookup by phone or dealer ID
   const wallet = await db
-    .prepare(`SELECT balance_lkr, status FROM wallets WHERE mobile_number = ?`)
-    .bind(mobile)
+    .prepare(
+      `SELECT balance_lkr, status FROM wallets
+       WHERE (mobile_number = ? AND ? != '') OR (mobile_number = ? AND ? != '')
+       ORDER BY balance_lkr DESC LIMIT 1`
+    )
+    .bind(searchPhone, searchPhone, dealerId, dealerId)
     .first<any>();
 
+  // Payouts paid
   const paid = await db
-    .prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(amount_lkr), 0) AS total FROM payouts WHERE mobile_number = ? AND status = 'PAID'`)
-    .bind(mobile)
+    .prepare(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(amount_lkr), 0) AS total FROM payouts
+       WHERE ((mobile_number = ? AND ? != '') OR (mobile_number = ? AND ? != '')) AND status = 'PAID'`
+    )
+    .bind(searchPhone, searchPhone, dealerId, dealerId)
     .first<any>();
 
+  // Associated dealers for this claimant
   const { results: dealers } = await db
     .prepare(
-      `SELECT COALESCE(d.name, 'Unknown') AS name, d.city AS city, COUNT(*) AS claims
+      `SELECT COALESCE(d.name, 'Direct Customer') AS name, d.city AS city, COUNT(*) AS claims
        FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id
-       WHERE s.mobile_number = ? GROUP BY s.dealer_id ORDER BY claims DESC LIMIT 5`
+       WHERE s.mobile_number = ? AND ? != '' GROUP BY s.dealer_id ORDER BY claims DESC LIMIT 5`
     )
-    .bind(mobile)
+    .bind(searchPhone, searchPhone)
     .all<any>();
 
+  // Device telemetry
   const { results: deviceRows } = await db
     .prepare(
       `SELECT device_fingerprint_hash AS hash, COUNT(*) AS claims, MAX(device_raw_json) AS raw
-       FROM submissions WHERE mobile_number = ? GROUP BY device_fingerprint_hash ORDER BY claims DESC LIMIT 10`
+       FROM submissions
+       WHERE ((mobile_number = ? AND ? != '') OR (dealer_id = ? AND ? != '')) AND device_fingerprint_hash IS NOT NULL
+       GROUP BY device_fingerprint_hash ORDER BY claims DESC LIMIT 10`
     )
-    .bind(mobile)
+    .bind(searchPhone, searchPhone, dealerId, dealerId)
     .all<any>();
-  const devices = deviceRows.map((d) => ({ hash: d.hash, claims: d.claims, ...describeDevice(safeJson(d.raw)) }));
+  const devices = (deviceRows || []).map((d) => ({ hash: d.hash, claims: d.claims, ...describeDevice(safeJson(d.raw)) }));
 
+  // Recent claims
   const { results: recent } = await db
     .prepare(
-      `SELECT id, status, created_at_server, total_claimed_reward_lkr, total_approved_reward_lkr, risk_score
-       FROM submissions WHERE mobile_number = ? ORDER BY created_at_server DESC LIMIT 10`
+      `SELECT id, mobile_number, status, created_at_server, total_claimed_reward_lkr, total_approved_reward_lkr, risk_score
+       FROM submissions
+       WHERE (dealer_id = ? AND ? != '') OR (mobile_number = ? AND ? != '')
+       ORDER BY created_at_server DESC LIMIT 15`
     )
-    .bind(mobile)
+    .bind(dealerId, dealerId, searchPhone, searchPhone)
     .all<any>();
 
+  // Bank details
   const bank = await db
-    .prepare(`SELECT account_name, account_number, bank_name, branch_name, updated_at FROM customer_bank_details WHERE mobile_number = ?`)
-    .bind(mobile)
+    .prepare(
+      `SELECT account_name, account_number, bank_name, branch_name, updated_at FROM customer_bank_details
+       WHERE (mobile_number = ? AND ? != '') OR (mobile_number = ? AND ? != '')
+       LIMIT 1`
+    )
+    .bind(searchPhone, searchPhone, dealerId, dealerId)
     .first<any>();
 
   return {
-    mobile,
-    stats,
+    mobile: effectiveKey,
+    contactPhone: contactPhone || searchPhone || null,
+    dealerMaster: dealerMaster || null,
+    isDealer: Boolean(dealerMaster),
+    stats: stats || { total: 0, approved: 0, rejected: 0, pending: 0, approved_lkr: 0, pending_lkr: 0, max_risk: 0 },
     wallet: wallet || { balance_lkr: 0, status: "ACTIVE" },
-    paidOut: paid,
-    dealers,
-    devices,
-    recent,
+    paidOut: paid || { n: 0, total: 0 },
+    dealers: dealers || [],
+    devices: devices || [],
+    recent: recent || [],
     bank: bank ? { ...bank, account_number: fullBank ? bank.account_number : maskAccount(bank.account_number) } : null,
   };
 }
@@ -506,13 +560,15 @@ export function registerExtras(app: App) {
     return c.json({ submission, items, billImageUrl: `/api/finance/submissions/${id}/image`, device, customer });
   });
 
-  app.get("/api/finance/customers/:mobile", async (c) => {
-    const session = await financeSession(c, ["finance_staff", "finance_lead"]);
+  async function handleGetCustomerProfile(c: any) {
+    const session = await financeSession(c, ["finance_staff", "finance_lead", "admin"]);
     if (!session) return c.json({ error: "Unauthorized" }, 401);
-    const profile = await customerProfile(c.env.DB, c.req.param("mobile"), session.role === "finance_lead");
-    if (!profile.stats?.total) return c.json({ error: "Customer not found" }, 404);
+    const profile = await customerProfile(c.env.DB, c.req.param("mobile"), session.role === "finance_lead" || session.role === "admin");
     return c.json({ customer: profile });
-  });
+  }
+
+  app.get("/api/finance/customers/:mobile", handleGetCustomerProfile);
+  app.get("/api/admin/customers/:mobile", handleGetCustomerProfile);
 
   // ---------- Finance: approve (double-approve guard + payout sync) ----------
 
@@ -555,10 +611,10 @@ export function registerExtras(app: App) {
     return c.json({ ok: true, totalApproved });
   });
 
-  // ---------- Finance Lead: payouts ----------
+  // ---------- Payouts (Finance Lead + Admin + read-only for Staff) ----------
 
-  app.get("/api/finance-lead/payouts", async (c) => {
-    if (!(await financeSession(c, ["finance_lead"]))) return c.json({ error: "Unauthorized" }, 401);
+  async function handleGetPayouts(c: any) {
+    if (!(await financeSession(c, ["finance_staff", "finance_lead"]))) return c.json({ error: "Unauthorized" }, 401);
 
     const status = (c.req.query("status") || "PENDING").toUpperCase();
     const threshold = parseFloat(c.env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
@@ -566,7 +622,6 @@ export function registerExtras(app: App) {
 
     let rebuildStats: any = null;
     if (doRebuild) {
-      // Force: recompute wallets from approved claims, then create payout rows
       rebuildStats = await rebuildWalletsFromApprovals(c.env);
     } else if (status === "PENDING" || status === "ALL") {
       await syncAllPayouts(c.env);
@@ -598,7 +653,6 @@ export function registerExtras(app: App) {
       .bind(threshold)
       .all();
 
-    // Always show top approved totals so lead can see why list is empty
     const { results: topApproved } = await c.env.DB.prepare(
       `SELECT mobile_number,
               COALESCE(SUM(total_approved_reward_lkr), 0) AS approved_total,
@@ -610,27 +664,31 @@ export function registerExtras(app: App) {
        LIMIT 30`
     ).all();
 
-    const walletCount = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM wallets`).first<{ n: number }>();
-    const walletOver = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM wallets WHERE balance_lkr >= ?`).bind(threshold).first<{ n: number }>();
+    const walletCount = (await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM wallets`).first()) as { n: number } | null;
+    const walletOver = (await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM wallets WHERE balance_lkr >= ?`).bind(threshold).first()) as { n: number } | null;
 
     return c.json({
-      payouts: results,
-      eligible,
-      topApproved,
+      payouts: results || [],
+      eligible: eligible || [],
+      topApproved: topApproved || [],
       stats: {
         wallets: walletCount?.n ?? 0,
         walletsOverThreshold: walletOver?.n ?? 0,
-        pendingPayouts: results.filter((p: any) => p.status === "PENDING").length,
+        pendingPayouts: (results || []).filter((p: any) => p.status === "PENDING").length,
       },
       rebuildStats,
       threshold,
       apiVersion: "2026-09-24d-customers",
       synced: true,
     });
-  });
+  }
 
-  app.post("/api/finance-lead/payouts/rebuild", async (c) => {
-    const session = await financeSession(c, ["finance_lead"]);
+  app.get("/api/finance/payouts", handleGetPayouts);
+  app.get("/api/finance-lead/payouts", handleGetPayouts);
+  app.get("/api/admin/payouts", handleGetPayouts);
+
+  async function handleRebuildPayouts(c: any) {
+    const session = await financeSession(c, ["finance_lead", "admin"]);
     if (!session) return c.json({ error: "Unauthorized" }, 401);
     const stats = await rebuildWalletsFromApprovals(c.env);
     await c.env.DB.prepare(
@@ -639,20 +697,72 @@ export function registerExtras(app: App) {
       .bind(session.sub, null, "REBUILD_WALLETS_PAYOUTS", JSON.stringify(stats))
       .run();
     return c.json({ ok: true, ...stats, apiVersion: "2026-09-24d-customers" });
-  });
+  }
 
+  app.post("/api/finance/payouts/rebuild", handleRebuildPayouts);
+  app.post("/api/finance-lead/payouts/rebuild", handleRebuildPayouts);
+  app.post("/api/admin/payouts/rebuild", handleRebuildPayouts);
 
-  // ---------- Customer summaries (mobile-based rollup for Finance) ----------
-  app.get("/api/finance/customer-summaries", async (c) => {
-    if (!(await financeSession(c, ["finance_staff", "finance_lead"]))) return c.json({ error: "Unauthorized" }, 401);
+  async function handleBindPayout(c: any) {
+    const session = await financeSession(c, ["finance_lead", "admin"]);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+
+    const id = c.req.param("id");
+    const body = ((await c.req.json()) || {}) as { erpReference?: string; bankReference?: string };
+    const erpReference = (body.erpReference || "").trim();
+    const bankReference = (body.bankReference || "").trim();
+    if (!erpReference || !bankReference) return c.json({ error: "ERP reference and bank reference are required" }, 400);
+
+    const payout = (await c.env.DB.prepare(`SELECT mobile_number, amount_lkr, status FROM payouts WHERE id = ?`)
+      .bind(id)
+      .first()) as { mobile_number: string; amount_lkr: number; status: string } | null;
+    if (!payout) return c.json({ error: "Not found" }, 404);
+    if (payout.status !== "PENDING") return c.json({ error: "This payout is already marked as paid" }, 409);
+
+    const bank = await c.env.DB.prepare(`SELECT mobile_number FROM customer_bank_details WHERE mobile_number = ?`)
+      .bind(payout.mobile_number)
+      .first();
+    if (!bank) return c.json({ error: "Customer has not submitted bank details yet — cannot bind payout." }, 400);
+
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        `UPDATE payouts SET status = 'PAID', erp_reference = ?, bank_reference = ?, bound_by = ?, bound_at = datetime('now')
+         WHERE id = ? AND status = 'PENDING'`
+      ).bind(erpReference, bankReference, session.sub, id),
+      c.env.DB.prepare(
+        `UPDATE wallets SET balance_lkr = MAX(0, balance_lkr - ?), status = 'ACTIVE', updated_at = datetime('now') WHERE mobile_number = ?`
+      ).bind(payout.amount_lkr, payout.mobile_number),
+    ]);
+    await syncPayout(c.env, payout.mobile_number);
+
+    await c.env.DB.prepare(
+      `INSERT INTO finance_audit_trail (actor, submission_id, action, details_json) VALUES (?,?,?,?)`
+    )
+      .bind(session.sub, null, "BIND_PAYOUT_REF", JSON.stringify({ payoutId: id, erpReference, bankReference }))
+      .run();
+
+    return c.json({ ok: true });
+  }
+
+  app.post("/api/finance/payouts/:id/bind", handleBindPayout);
+  app.post("/api/finance-lead/payouts/:id/bind", handleBindPayout);
+  app.post("/api/admin/payouts/:id/bind", handleBindPayout);
+
+  // ---------- Customer summaries (combining Dealer master & Submissions) ----------
+  async function handleCustomerSummaries(c: any) {
+    if (!(await financeSession(c, ["finance_staff", "finance_lead", "admin"]))) return c.json({ error: "Unauthorized" }, 401);
 
     const threshold = parseFloat(c.env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
-    const q = (c.req.query("q") || "").trim();
+    const q = (c.req.query("q") || "").trim().toLowerCase();
     const sort = (c.req.query("sort") || "approved").toLowerCase();
-    const limit = Math.min(500, Math.max(20, parseInt(c.req.query("limit") || "100", 10) || 100));
+    const limit = Math.min(500, Math.max(20, parseInt(c.req.query("limit") || "200", 10) || 200));
 
-    // Core rollup per mobile
-    let sql = `
+    // Pull dealers and submissions
+    const { results: dealers } = (await c.env.DB.prepare(
+      `SELECT id, customer_code, name, contact_phone, city, address, active FROM dealers`
+    ).all()) as any;
+
+    const { results: subRollup } = (await c.env.DB.prepare(`
       SELECT s.mobile_number,
              COUNT(*) AS total_submissions,
              COALESCE(SUM(s.status = 'APPROVED'), 0) AS approved_count,
@@ -673,74 +783,178 @@ export function registerExtras(app: App) {
              MIN(s.created_at_server) AS first_seen,
              MAX(s.created_at_server) AS last_seen
       FROM submissions s
-    `;
-    const binds: any[] = [];
-    if (q) {
-      sql += ` WHERE s.mobile_number LIKE ? `;
-      binds.push(`%${q}%`);
+      WHERE s.mobile_number IS NOT NULL AND s.mobile_number != ''
+      GROUP BY s.mobile_number
+    `).all()) as any;
+
+    const subMap = new Map<string, any>();
+    for (const r of subRollup || []) {
+      subMap.set(r.mobile_number, r);
     }
-    sql += ` GROUP BY s.mobile_number `;
 
-    const orderMap: Record<string, string> = {
-      approved: "approved_lkr DESC",
-      pending: "pending_lkr DESC",
-      risk: "max_risk DESC",
-      submissions: "total_submissions DESC",
-      recent: "last_seen DESC",
-    };
-    sql += ` ORDER BY ${orderMap[sort] || orderMap.approved} LIMIT ? `;
-    binds.push(limit);
+    // Roll up submissions submitted at dealers
+    const { results: dealerSubRollup } = (await c.env.DB.prepare(`
+      SELECT s.dealer_id,
+             COUNT(*) AS dealer_submissions,
+             COALESCE(SUM(s.status = 'APPROVED'), 0) AS dealer_approved_count,
+             COALESCE(SUM(CASE WHEN s.status = 'APPROVED' THEN s.total_approved_reward_lkr ELSE 0 END), 0) AS dealer_approved_lkr
+      FROM submissions s
+      WHERE s.dealer_id IS NOT NULL AND s.dealer_id != ''
+      GROUP BY s.dealer_id
+    `).all()) as any;
+    const dealerSubMap = new Map<string, any>();
+    for (const ds of dealerSubRollup || []) {
+      dealerSubMap.set(ds.dealer_id, ds);
+    }
 
-    const { results } = await c.env.DB.prepare(sql).bind(...binds).all<any>();
+    const { results: wallets } = (await c.env.DB.prepare(`SELECT mobile_number, balance_lkr, status FROM wallets`).all()) as any;
+    const walletMap = new Map<string, any>();
+    for (const w of wallets || []) {
+      walletMap.set(w.mobile_number, w);
+    }
 
-    // Attach wallet + bank + paid
-    const customers = [];
-    for (const r of results) {
-      const wallet = await c.env.DB.prepare(`SELECT balance_lkr, status FROM wallets WHERE mobile_number = ?`)
-        .bind(r.mobile_number)
-        .first<any>();
-      const paid = await c.env.DB.prepare(
-        `SELECT COUNT(*) AS n, COALESCE(SUM(amount_lkr), 0) AS total FROM payouts WHERE mobile_number = ? AND status = 'PAID'`
-      )
-        .bind(r.mobile_number)
-        .first<any>();
-      const pendingPay = await c.env.DB.prepare(
-        `SELECT COUNT(*) AS n, COALESCE(SUM(amount_lkr), 0) AS total FROM payouts WHERE mobile_number = ? AND status = 'PENDING'`
-      )
-        .bind(r.mobile_number)
-        .first<any>();
-      const bank = await c.env.DB.prepare(
-        `SELECT account_name, bank_name FROM customer_bank_details WHERE mobile_number = ?`
-      )
-        .bind(r.mobile_number)
-        .first<any>();
+    const { results: bankList } = (await c.env.DB.prepare(`SELECT mobile_number, account_name, bank_name FROM customer_bank_details`).all()) as any;
+    const bankMap = new Map<string, any>();
+    for (const b of bankList || []) {
+      bankMap.set(b.mobile_number, b);
+    }
 
-      const approved = Number(r.approved_lkr || 0);
+    const { results: payoutList } = (await c.env.DB.prepare(
+      `SELECT mobile_number, status, COUNT(*) as count, COALESCE(SUM(amount_lkr), 0) as total FROM payouts GROUP BY mobile_number, status`
+    ).all()) as any;
+    const paidMap = new Map<string, { count: number; total: number }>();
+    const pendingPayMap = new Map<string, { count: number; total: number }>();
+    for (const p of payoutList || []) {
+      if (p.status === "PAID") paidMap.set(p.mobile_number, { count: p.count, total: Number(p.total) });
+      if (p.status === "PENDING") pendingPayMap.set(p.mobile_number, { count: p.count, total: Number(p.total) });
+    }
+
+    // Dealer lookup maps
+    const dealerByPhone = new Map<string, any>();
+    const dealerById = new Map<string, any>();
+    for (const d of dealers || []) {
+      if (d.contact_phone) dealerByPhone.set(d.contact_phone, d);
+      if (d.id) dealerById.set(d.id, d);
+    }
+
+    // Combine all unique keys (mobiles from submissions, contact phones from dealers, and dealers themselves)
+    const allKeys = new Set<string>();
+    for (const d of dealers || []) {
+      allKeys.add(d.contact_phone || d.id);
+    }
+    for (const m of subMap.keys()) {
+      allKeys.add(m);
+    }
+
+    let customers = [];
+    for (const key of allKeys) {
+      const dealer = dealerByPhone.get(key) || dealerById.get(key);
+      const sub = subMap.get(key) || {
+        mobile_number: key,
+        total_submissions: 0,
+        approved_count: 0,
+        rejected_count: 0,
+        pending_count: 0,
+        approved_lkr: 0,
+        pending_lkr: 0,
+        rejected_lkr: 0,
+        claimed_lkr: 0,
+        max_risk: 0,
+        high_risk_count: 0,
+        flagged_count: 0,
+        geo_mismatch_count: 0,
+        duplicate_count: 0,
+        velocity_count: 0,
+        device_count: 0,
+        dealer_count: 0,
+        first_seen: null,
+        last_seen: null,
+      };
+
+      const dealerClaims = dealer?.id ? dealerSubMap.get(dealer.id) : null;
+      const wallet = walletMap.get(key) || (dealer?.id ? walletMap.get(dealer.id) : null);
+      const paid = paidMap.get(key) || (dealer?.id ? paidMap.get(dealer.id) : null);
+      const pendingPay = pendingPayMap.get(key) || (dealer?.id ? pendingPayMap.get(dealer.id) : null);
+      const bank = bankMap.get(key) || (dealer?.id ? bankMap.get(dealer.id) : null);
+
+      const approved = Number(sub.approved_lkr || 0);
       const walletBal = wallet ? Number(wallet.balance_lkr || 0) : 0;
-      const paidTotal = Number(paid?.total || 0);
+      const paidTotal = paid ? Number(paid.total || 0) : 0;
       const net = Math.max(0, approved - paidTotal);
 
-      customers.push({
-        ...r,
+      // Clean display phone (don't display internal slug ID as phone number)
+      const displayPhone = dealer?.contact_phone || (key.startsWith("DLR-") ? "" : key);
+
+      const entry = {
+        mobile_number: displayPhone || "—",
+        lookup_key: key,
+        dealer_name: dealer?.name || "Direct Customer",
+        customer_code: dealer?.customer_code || "—",
+        city: dealer?.city || "—",
+        address: dealer?.address || "—",
+        dealer_id: dealer?.id || null,
+        is_dealer: !!dealer,
+        is_new_dealer: !!dealer && sub.total_submissions === 0 && (!dealerClaims || dealerClaims.dealer_submissions === 0),
+        dealer_claims_count: dealerClaims?.dealer_submissions || 0,
+        dealer_approved_reward: dealerClaims?.dealer_approved_lkr || 0,
+        total_submissions: sub.total_submissions,
+        approved_count: sub.approved_count,
+        rejected_count: sub.rejected_count,
+        pending_count: sub.pending_count,
+        approved_lkr: approved,
+        pending_lkr: Number(sub.pending_lkr || 0),
+        rejected_lkr: Number(sub.rejected_lkr || 0),
+        claimed_lkr: Number(sub.claimed_lkr || 0),
+        max_risk: sub.max_risk,
+        high_risk_count: sub.high_risk_count,
+        flagged_count: sub.flagged_count,
+        geo_mismatch_count: sub.geo_mismatch_count,
+        duplicate_count: sub.duplicate_count,
+        velocity_count: sub.velocity_count,
+        device_count: sub.device_count,
+        dealer_count: sub.dealer_count,
+        first_seen: sub.first_seen,
+        last_seen: sub.last_seen,
         wallet_balance: walletBal,
-        wallet_status: wallet?.status || "NONE",
+        wallet_status: wallet?.status || "ACTIVE",
         paid_lkr: paidTotal,
-        paid_count: paid?.n || 0,
-        pending_payout_lkr: Number(pendingPay?.total || 0),
-        pending_payout_count: pendingPay?.n || 0,
+        paid_count: paid?.count || 0,
+        pending_payout_lkr: pendingPay?.total || 0,
+        pending_payout_count: pendingPay?.count || 0,
         has_bank: !!bank,
         bank_name: bank?.bank_name || null,
         account_name: bank?.account_name || null,
         net_payable: net,
-        payout_eligible: net >= threshold,
-        suspect: Number(r.high_risk_count) > 0 || Number(r.flagged_count) > 0 || Number(r.device_count) > 2,
-      });
+        payout_eligible: net >= threshold || walletBal >= threshold,
+        suspect: Number(sub.high_risk_count) > 0 || Number(sub.flagged_count) > 0 || Number(sub.device_count) > 2,
+      };
+
+      if (q) {
+        const matchesPhone = (displayPhone || "").toLowerCase().includes(q);
+        const matchesName = (entry.dealer_name || "").toLowerCase().includes(q);
+        const matchesCode = (entry.customer_code || "").toLowerCase().includes(q);
+        const matchesCity = (entry.city || "").toLowerCase().includes(q);
+        if (!matchesPhone && !matchesName && !matchesCode && !matchesCity) continue;
+      }
+
+      customers.push(entry);
     }
+
+    if (sort === "approved") customers.sort((a, b) => b.approved_lkr - a.approved_lkr);
+    else if (sort === "pending") customers.sort((a, b) => b.pending_lkr - a.pending_lkr);
+    else if (sort === "risk") customers.sort((a, b) => b.max_risk - a.max_risk);
+    else if (sort === "submissions") customers.sort((a, b) => b.total_submissions - a.total_submissions);
+    else if (sort === "recent") customers.sort((a, b) => String(b.last_seen || "").localeCompare(String(a.last_seen || "")));
+    else if (sort === "wallet") customers.sort((a, b) => b.wallet_balance - a.wallet_balance);
+
+    customers = customers.slice(0, limit);
 
     const totals = {
       customers: customers.length,
+      dealers_count: customers.filter(c => c.is_dealer).length,
       approved_lkr: customers.reduce((a, x) => a + Number(x.approved_lkr || 0), 0),
       pending_lkr: customers.reduce((a, x) => a + Number(x.pending_lkr || 0), 0),
+      wallet_balance_lkr: customers.reduce((a, x) => a + Number(x.wallet_balance || 0), 0),
       eligible: customers.filter((x) => x.payout_eligible).length,
       suspects: customers.filter((x) => x.suspect).length,
       with_pending_payout: customers.filter((x) => x.pending_payout_count > 0).length,
@@ -752,7 +966,10 @@ export function registerExtras(app: App) {
       threshold,
       apiVersion: "2026-09-24d-customers",
     });
-  });
+  }
+
+  app.get("/api/finance/customer-summaries", handleCustomerSummaries);
+  app.get("/api/admin/customer-summaries", handleCustomerSummaries);
 
   app.get("/api/version", async (c) => {
     return c.json({

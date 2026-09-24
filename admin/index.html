@@ -3,118 +3,1037 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Admin Panel</title>
+<title>CanTec Rewards — Admin Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root { --primary: #1a6b3c; --danger: #b91c1c; --bg: #f3f4f6; --card: #fff; --border: #e2e5e4; --muted: #6b7280; }
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; }
-  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--card); padding: 0 20px; }
-  .tab { padding: 14px 18px; cursor: pointer; color: var(--muted); font-weight: 600; border-bottom: 3px solid transparent; }
-  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-  .content { padding: 20px; max-width: 900px; margin: 0 auto; }
-  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
-  .panel h3 { margin: 0 0 12px; font-size: 1rem; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #f0f0f0; font-size: 0.9rem; }
-  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
-  .role-badge { padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: #eef2ff; color: #3730a3; }
-  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-  .status-dot.active { background: #16a34a; } .status-dot.inactive { background: #9ca3af; }
-  .row-actions a { font-size: 0.8rem; color: var(--primary); cursor: pointer; margin-right: 10px; text-decoration: none; }
-  .row-actions a.danger { color: var(--danger); }
-  input, select { padding: 9px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; }
-  .form-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-  .form-row input, .form-row select { flex: 1; min-width: 140px; }
-  button { padding: 9px 16px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
-  button.secondary { background: #374151; }
-  #loginOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
-  #loginBox { background: #fff; padding: 24px; border-radius: 12px; width: 300px; }
-  #loginBox input { width: 100%; margin-bottom: 10px; }
-  #loginBox button { width: 100%; }
-  .msg { font-size: 0.85rem; margin-top: 6px; }
-  .msg.err { color: var(--danger); } .msg.ok { color: var(--primary); }
-  .app-header { background: var(--primary); color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 14px; }
-  .app-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
-  .app-header nav a { color: #fff; opacity: 0.85; text-decoration: none; font-size: 0.9rem; margin-left: 14px; }
-  .app-header .spacer { flex: 1; }
-  .app-header .who { font-size: 0.85rem; opacity: 0.9; margin-right: 10px; }
-  .app-header button.logout { background: rgba(255,255,255,0.15); color: #fff; border: none; padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
-  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-  .stat-card .num { font-size: 1.6rem; font-weight: 700; }
-  .stat-card .label { color: var(--muted); font-size: 0.8rem; }
-  .qr-preview { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin-top: 14px; }
-  .qr-preview .qr-box { border: 1px solid var(--border); border-radius: 10px; padding: 14px; background: #fff; }
-  .qr-preview .qr-actions { display: flex; flex-direction: column; gap: 8px; }
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --surface-subtle: #f1f5f9;
+    --border: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --text: #0f172a;
+    --text-muted: #64748b;
+    --text-subtle: #94a3b8;
+    --primary: #0f766e;
+    --primary-hover: #115e59;
+    --primary-light: #f0fdfa;
+    --primary-border: #99f6e4;
+    --accent: #14b8a6;
+    --success: #16a34a;
+    --success-light: #f0fdf4;
+    --warning: #d97706;
+    --warning-light: #fffbeb;
+    --danger: #dc2626;
+    --danger-light: #fef2f2;
+    --indigo: #4f46e5;
+    --indigo-light: #eef2ff;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Enterprise Top Nav */
+  .top-header {
+    background: #090e17;
+    color: #ffffff;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .nav-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: #ffffff;
+  }
+  .brand-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #ffffff;
+    box-shadow: 0 0 16px rgba(20, 184, 166, 0.4);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .brand-text {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 1.05rem;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .env-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    background: rgba(20, 184, 166, 0.18);
+    color: #2dd4bf;
+    border: 1px solid rgba(45, 212, 191, 0.3);
+    border-radius: 6px;
+  }
+  
+  .portal-switch {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 3px;
+    margin-left: 12px;
+  }
+  .portal-link {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    transition: all 0.15s;
+    cursor: pointer;
+  }
+  .portal-link:hover { color: #ffffff; }
+  .portal-link.active {
+    background: #0f766e;
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  .nav-spacer { flex: 1; }
+
+  .user-profile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .user-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 12px 5px 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+  }
+  .user-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #e2e8f0;
+  }
+  .user-info { display: flex; flex-direction: column; line-height: 1.1; }
+  .user-name { font-size: 0.78rem; font-weight: 600; color: #f1f5f9; }
+  .user-role { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .btn-logout {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #cbd5e1;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-logout:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  /* Sub-Navigation Tabs */
+  .subnav-bar {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 64px;
+    z-index: 40;
+    box-shadow: var(--shadow-sm);
+  }
+  .subnav-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .subnav-inner::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 15px 16px;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+  .tab-pill {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--surface-subtle);
+    color: var(--text-muted);
+  }
+  .tab-btn.active .tab-pill {
+    background: var(--primary-light);
+    color: var(--primary);
+  }
+
+  /* Main Layout */
+  .main-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 28px 24px 60px;
+  }
+
+  /* Page Header Section */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .page-header-info h1 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--text);
+  }
+  .page-header-info p {
+    font-size: 0.86rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .page-header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  /* Premium Stat Cards */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: transparent;
+  }
+  .stat-card.primary::before { background: linear-gradient(90deg, #14b8a6, #0f766e); }
+  .stat-card.warning::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+  .stat-card.success::before { background: linear-gradient(90deg, #22c55e, #16a34a); }
+  .stat-card.indigo::before { background: linear-gradient(90deg, #6366f1, #4f46e5); }
+
+  .stat-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.85rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    line-height: 1.1;
+  }
+  .stat-sub {
+    font-size: 0.78rem;
+    color: var(--text-subtle);
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Cards & Panels */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: #fafbfb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .card-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-body { padding: 20px; }
+
+  /* Tables */
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    text-align: left;
+  }
+  th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 600;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f8fafc; }
+
+  /* Monospace metrics */
+  .mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Status Chips */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .chip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .chip-success { background: var(--success-light); color: var(--success); border: 1px solid #bbf7d0; }
+  .chip-success .chip-dot { background: var(--success); }
+  .chip-warning { background: var(--warning-light); color: var(--warning); border: 1px solid #fde68a; }
+  .chip-warning .chip-dot { background: var(--warning); }
+  .chip-danger { background: var(--danger-light); color: var(--danger); border: 1px solid #fecaca; }
+  .chip-danger .chip-dot { background: var(--danger); }
+  .chip-muted { background: var(--surface-subtle); color: var(--text-muted); border: 1px solid var(--border); }
+  .chip-muted .chip-dot { background: var(--text-subtle); }
+  .chip-indigo { background: var(--indigo-light); color: var(--indigo); border: 1px solid #c7d2fe; }
+  .chip-indigo .chip-dot { background: var(--indigo); }
+
+  /* Forms & Buttons */
+  input[type="text"], input[type="password"], input[type="number"], select, textarea {
+    width: 100%;
+    padding: 9px 12px;
+    font-family: inherit;
+    font-size: 0.88rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: #ffffff;
+    color: var(--text);
+    outline: none;
+    transition: all 0.15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  .form-group label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 5px;
+  }
+  .form-group .hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 118, 110, 0.2);
+  }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-secondary {
+    background: #ffffff;
+    color: #334155;
+    border-color: var(--border);
+  }
+  .btn-secondary:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+  }
+  .btn-outline {
+    background: transparent;
+    color: var(--primary);
+    border-color: var(--primary-border);
+  }
+  .btn-outline:hover {
+    background: var(--primary-light);
+  }
+  .btn-danger {
+    background: var(--danger);
+    color: #ffffff;
+  }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-sm {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .btn-close {
+    background: transparent;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px;
+  }
+  .btn-close:hover { color: var(--text); }
+
+  /* Filter Toolbar */
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .search-wrapper {
+    flex: 1;
+    max-width: 420px;
+    min-width: 240px;
+    position: relative;
+  }
+
+  .pill-filter-group {
+    display: flex;
+    gap: 4px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+  }
+  .pill-filter-btn {
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .pill-filter-btn:hover { color: var(--text); }
+  .pill-filter-btn.active {
+    background: var(--primary);
+    color: #ffffff;
+  }
+
+  /* Notifications / Banners */
+  .banner {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    margin-top: 12px;
+    display: none;
+  }
+  .banner.err { display: block; background: var(--danger-light); color: var(--danger); border: 1px solid #fecaca; }
+  .banner.ok { display: block; background: var(--success-light); color: var(--success); border: 1px solid #bbf7d0; }
+
+  /* Modal / Slide-over Drawer */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(9, 14, 23, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal-dialog {
+    background: var(--surface);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: var(--shadow-xl);
+    overflow: hidden;
+    animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes modalPop {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .modal-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .modal-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+  .modal-body { padding: 24px; }
+  .modal-footer {
+    padding: 16px 24px;
+    background: #fafbfb;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  /* Slide-over Drawer for Customer Dossier */
+  .drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(9, 14, 23, 0.5);
+    backdrop-filter: blur(2px);
+    z-index: 90;
+    display: none;
+    justify-content: flex-end;
+  }
+  .drawer-overlay.active { display: flex; }
+  .drawer-content {
+    background: #ffffff;
+    width: 100%;
+    max-width: 580px;
+    height: 100%;
+    box-shadow: -10px 0 25px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes slideLeft {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  .drawer-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fafbfb;
+  }
+  .drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+  }
+  .detail-section {
+    margin-bottom: 24px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .detail-section-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 0.85rem;
+    gap: 12px;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-label { color: var(--text-muted); }
+  .detail-val { font-weight: 600; text-align: right; word-break: break-all; }
+
+  /* Login Overlay */
+  #loginOverlay {
+    position: fixed;
+    inset: 0;
+    background: #090e17;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 20px;
+  }
+  .login-box {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 36px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  }
+  .login-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  /* QR Box */
+  .qr-card-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-width: 320px;
+    margin-top: 16px;
+    gap: 12px;
+  }
 </style>
 </head>
 <body>
 
+<!-- Login Modal -->
 <div id="loginOverlay">
-  <div id="loginBox">
-    <h3>Admin Login</h3>
-    <input type="text" id="username" placeholder="Username" />
-    <input type="password" id="password" placeholder="Password" />
-    <button id="loginBtn">Sign In</button>
-    <div id="loginError" class="msg err"></div>
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="brand-icon">C</div>
+      <div>
+        <h2 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.15rem;font-weight:800;letter-spacing:-0.02em;">CanTec Rewards</h2>
+        <p style="font-size:0.8rem;color:var(--text-muted);">Admin Command Center</p>
+      </div>
+    </div>
+    
+    <div style="margin-bottom:14px;">
+      <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Username</label>
+      <input type="text" id="loginUsername" placeholder="admin" value="admin" />
+    </div>
+    <div style="margin-bottom:18px;">
+      <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" value="admin123" />
+    </div>
+    
+    <button class="btn btn-primary" id="loginSubmitBtn" style="width:100%;padding:11px;font-size:0.9rem;">
+      Sign In to Command Center
+    </button>
+    <div id="loginError" class="banner err"></div>
+
+    <div style="margin-top:20px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:0.78rem;color:#64748b;">
+      <div style="font-weight:600;color:#0f172a;margin-bottom:4px;">Default Demo Credentials:</div>
+      <div>Administrator: <b>admin</b> / <b>admin123</b></div>
+    </div>
   </div>
 </div>
 
+<!-- Main Application Interface -->
 <div id="app" style="display:none;">
-  <div class="app-header">
-    <h2>🛠️ Admin Panel <span style="font-size:0.7rem;opacity:0.75;font-weight:500;">v2026-09-24</span></h2>
-    <nav><a href="/finance.html">Finance Dashboard →</a></nav>
-    <div class="spacer"></div>
-    <span class="who" id="whoLabel"></span>
-    <button class="logout" id="logoutBtn">Log out</button>
+  <!-- Enterprise Header -->
+  <header class="top-header">
+    <div class="nav-inner">
+      <a href="/admin/index.html" class="brand">
+        <div class="brand-icon">C</div>
+        <div class="brand-text">
+          CanTec Rewards
+          <span class="env-tag">Console</span>
+        </div>
+      </a>
+
+      <!-- Portal Navigation Switch -->
+      <div class="portal-switch">
+        <a href="/admin/index.html" class="portal-link active">Admin Console</a>
+        <a href="/admin/finance.html" class="portal-link" id="linkFinanceDashboard">Finance Queue →</a>
+        <a href="/" target="_blank" class="portal-link">Claim Portal ↗</a>
+      </div>
+
+      <div class="nav-spacer"></div>
+
+      <div class="user-profile">
+        <div class="user-badge">
+          <div class="user-avatar" id="avatarLetter">A</div>
+          <div class="user-info">
+            <span class="user-name" id="userNameLabel">Administrator</span>
+            <span class="user-role" id="userRoleLabel">Master Admin</span>
+          </div>
+        </div>
+        <button class="btn-logout" id="logoutBtn">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sticky Sub-Navigation Bar -->
+  <nav class="subnav-bar">
+    <div class="subnav-inner">
+      <button class="tab-btn active" data-tab="overview">
+        📊 Overview
+      </button>
+      <button class="tab-btn" data-tab="customers">
+        🏢 Customer Master
+        <span class="tab-pill" id="badgeCustomerCount">0</span>
+      </button>
+      <button class="tab-btn" data-tab="summaries">
+        👥 Customer Summaries &amp; Ledger
+        <span class="tab-pill" id="badgeSummariesCount">0</span>
+      </button>
+      <button class="tab-btn" data-tab="payouts">
+        💳 Payout Management
+        <span class="tab-pill" id="badgePayoutCount">0</span>
+      </button>
+      <button class="tab-btn" data-tab="items">
+        📦 Item Master
+      </button>
+      <button class="tab-btn" data-tab="rates">
+        ⚙️ Payout Rates
+      </button>
+      <button class="tab-btn" data-tab="staff">
+        👥 Staff Accounts
+      </button>
+      <button class="tab-btn" data-tab="qr">
+        📱 QR / URL Assets
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="main-content">
+    <div id="view-overview"></div>
+    <div id="view-customers" style="display:none;"></div>
+    <div id="view-summaries" style="display:none;"></div>
+    <div id="view-payouts" style="display:none;"></div>
+    <div id="view-items" style="display:none;"></div>
+    <div id="view-rates" style="display:none;"></div>
+    <div id="view-staff" style="display:none;"></div>
+    <div id="view-qr" style="display:none;"></div>
+  </main>
+</div>
+
+<!-- Customer Intelligence Slide-over Dossier Drawer -->
+<div class="drawer-overlay" id="customerDrawer">
+  <div class="drawer-content">
+    <div class="drawer-header">
+      <div>
+        <h3 id="drawerTitle" style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.1rem;font-weight:700;">Customer Profile</h3>
+        <p id="drawerSubtitle" style="font-size:0.8rem;color:var(--text-muted);"></p>
+      </div>
+      <button class="btn-close" onclick="closeCustomerDrawer()">&times;</button>
+    </div>
+    <div class="drawer-body" id="drawerBody">
+      <div style="padding:40px 0;text-align:center;color:var(--text-muted);">
+        Pulling customer ledger, wallet, and telemetry…
+      </div>
+    </div>
   </div>
-  <div class="tabs">
-    <div class="tab active" data-tab="overview">Overview</div>
-    <div class="tab" data-tab="staff">Staff Accounts</div>
-    <div class="tab" data-tab="customers">Customer Master</div>
-    <div class="tab" data-tab="items">Item Master</div>
-    <div class="tab" data-tab="rates">Payout Rates</div>
-    <div class="tab" data-tab="qr">QR / URL Assets</div>
+</div>
+
+<!-- Modal: Bind ERP & Mark Paid -->
+<div class="modal-overlay" id="payoutModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title">Process &amp; Settle Payout</h3>
+      <button class="btn-close" onclick="closePayoutModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">
+        Bind your corporate ERP voucher code and commercial bank transaction reference. This marks the batch as PAID and automatically deducts the customer wallet.
+      </p>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>ERP Payment Voucher Reference *</label>
+        <input type="text" id="modalErpRef" placeholder="e.g. ERP-PAY-2026-001" />
+      </div>
+      <div class="form-group">
+        <label>Bank CEFT / Cheque Reference *</label>
+        <input type="text" id="modalBankRef" placeholder="e.g. CEFT-8849201" />
+      </div>
+      <div id="modalPayoutError" class="banner err"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closePayoutModal()">Cancel</button>
+      <button class="btn btn-primary" id="btnConfirmPayout">Confirm Bank Payment</button>
+    </div>
   </div>
-  <div class="content">
-    <div id="tab-overview"></div>
-    <div id="tab-staff" style="display:none;"></div>
-    <div id="tab-customers" style="display:none;"></div>
-    <div id="tab-items" style="display:none;"></div>
-    <div id="tab-rates" style="display:none;"></div>
-    <div id="tab-qr" style="display:none;"></div>
+</div>
+
+<!-- Modal: Add New Customer / Dealer -->
+<div class="modal-overlay" id="addCustomerModal">
+  <div class="modal-dialog" style="max-width:560px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Register Customer / Dealer Master</h3>
+      <button class="btn-close" onclick="closeAddCustomerModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Customer / Dealer Code</label>
+          <input type="text" id="newCustCode" placeholder="e.g. DLR-COL-001" />
+          <div class="hint">Unique identifier code</div>
+        </div>
+        <div class="form-group">
+          <label>Store / Customer Name *</label>
+          <input type="text" id="newCustName" placeholder="e.g. Colombo Central Hardware" />
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Contact Phone / Mobile</label>
+          <input type="text" id="newCustPhone" placeholder="e.g. 0771234567" />
+        </div>
+        <div class="form-group">
+          <label>City / Region</label>
+          <input type="text" id="newCustCity" placeholder="e.g. Colombo" />
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Street Address</label>
+        <input type="text" id="newCustAddress" placeholder="e.g. 142 Main Street, Pettah" />
+      </div>
+      <div class="form-group">
+        <label>Location Coordinates or Google Maps Link</label>
+        <input type="text" id="newCustLocation" placeholder="e.g. 6.9271, 79.8612 or maps.app.goo.gl/..." />
+        <div class="hint">Allows automatic GPS geofencing against fraud</div>
+      </div>
+      <div id="newCustError" class="banner err"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAddCustomerModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreateCustomer()">Save Customer Record</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add New Product Item -->
+<div class="modal-overlay" id="addItemModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title">Add New Product to Catalog</h3>
+      <button class="btn-close" onclick="closeAddItemModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Item SKU / Code</label>
+        <input type="text" id="newItemCode" placeholder="e.g. WP-25KG" />
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Product Name *</label>
+        <input type="text" id="newItemName" placeholder="e.g. CanTec Wall Putty 25kg" />
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Unit Packaging</label>
+          <input type="text" id="newItemUnit" placeholder="bag / bucket / drum" value="bag" />
+        </div>
+        <div class="form-group">
+          <label>Reward Rate (LKR)</label>
+          <input type="number" step="0.01" id="newItemRate" placeholder="e.g. 150.00" />
+        </div>
+      </div>
+      <div id="newItemError" class="banner err"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAddItemModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreateItem()">Create Product</button>
+    </div>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-
 <script src="/config.js"></script>
+
 <script>
 const API_BASE = window.API_BASE || "";
 let token = localStorage.getItem("adminToken") || null;
-let currentUsername = null;
+let currentUsername = localStorage.getItem("adminUsername") || "admin";
+let activePayoutId = null;
 
-document.getElementById("loginBtn").addEventListener("click", async () => {
-  const username = document.getElementById("username").value;
-  const password = document.getElementById("password").value;
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password })
-  });
-  const data = await res.json();
-  if (!res.ok) { document.getElementById("loginError").textContent = data.error; return; }
-  if (data.role !== "admin") { document.getElementById("loginError").textContent = "This account does not have admin access."; return; }
-  token = data.token;
-  currentUsername = username;
-  localStorage.setItem("adminToken", token);
-  localStorage.setItem("adminUsername", username);
-  showApp();
+// Ensure token works seamlessly across Admin and Finance
+if (token) {
+  localStorage.setItem("financeToken", token);
+  localStorage.setItem("financeRole", "admin");
+  localStorage.setItem("financeUsername", currentUsername);
+}
+
+// -------------------------------------------------------------
+// Authentication & Session
+// -------------------------------------------------------------
+document.getElementById("loginSubmitBtn").addEventListener("click", async () => {
+  const u = document.getElementById("loginUsername").value.trim();
+  const p = document.getElementById("loginPassword").value;
+  const msg = document.getElementById("loginError");
+  msg.className = "banner";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: u, password: p })
+    });
+    const data = await res.json();
+    if (!res.ok) { msg.className = "banner err"; msg.textContent = data.error || "Authentication failed."; return; }
+    if (data.role !== "admin") {
+      msg.className = "banner err";
+      msg.textContent = "This portal requires Administrator access. Use Finance Dashboard for staff accounts.";
+      return;
+    }
+    token = data.token;
+    currentUsername = u;
+    localStorage.setItem("adminToken", token);
+    localStorage.setItem("adminUsername", u);
+    localStorage.setItem("financeToken", token);
+    localStorage.setItem("financeRole", "admin");
+    localStorage.setItem("financeUsername", u);
+    showApp();
+  } catch (err) {
+    msg.className = "banner err";
+    msg.textContent = "Server connection error.";
+  }
 });
 
 document.getElementById("logoutBtn").addEventListener("click", () => {
   localStorage.removeItem("adminToken");
   localStorage.removeItem("adminUsername");
+  localStorage.removeItem("financeToken");
+  localStorage.removeItem("financeRole");
+  localStorage.removeItem("financeUsername");
   location.reload();
 });
 
@@ -125,597 +1044,1594 @@ function authHeaders() {
 function showApp() {
   document.getElementById("loginOverlay").style.display = "none";
   document.getElementById("app").style.display = "block";
-  document.getElementById("whoLabel").textContent = localStorage.getItem("adminUsername") || "";
+  document.getElementById("userNameLabel").textContent = currentUsername;
+  document.getElementById("avatarLetter").textContent = currentUsername.charAt(0).toUpperCase();
+
   loadOverview();
-  loadStaff();
-  loadRates();
-  loadCustomers();
-  loadItems();
+  updateHeaderCounts();
 }
 
-document.querySelectorAll(".tab").forEach(tab => {
+if (token) {
+  showApp();
+}
+
+// -------------------------------------------------------------
+// Sub-Navigation Tabs Switching
+// -------------------------------------------------------------
+document.querySelectorAll(".tab-btn").forEach(tab => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tab-btn").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
-    ["overview", "staff", "customers", "items", "rates", "qr"].forEach(name => {
-      document.getElementById(`tab-${name}`).style.display = name === tab.dataset.tab ? "block" : "none";
+    const target = tab.dataset.tab;
+    ["overview", "customers", "summaries", "payouts", "items", "rates", "staff", "qr"].forEach(name => {
+      const el = document.getElementById(`view-${name}`);
+      if (el) el.style.display = name === target ? "block" : "none";
     });
-    if (tab.dataset.tab === "overview") loadOverview();
-    if (tab.dataset.tab === "qr") loadQrTab();
+
+    if (target === "overview") loadOverview();
+    else if (target === "customers") loadCustomers();
+    else if (target === "summaries") loadCustomerSummaries();
+    else if (target === "payouts") loadPayouts();
+    else if (target === "items") loadItems();
+    else if (target === "rates") loadRates();
+    else if (target === "staff") loadStaff();
+    else if (target === "qr") loadQrTab();
   });
 });
 
-// ============================================================
-// Overview
-// ============================================================
+async function updateHeaderCounts() {
+  try {
+    const custRes = await fetch(`${API_BASE}/api/admin/dealers`, { headers: authHeaders() });
+    if (custRes.ok) {
+      const data = await custRes.json();
+      document.getElementById("badgeCustomerCount").textContent = (data.dealers || []).length;
+    }
+    const payRes = await fetch(`${API_BASE}/api/admin/payouts?status=PENDING`, { headers: authHeaders() });
+    if (payRes.ok) {
+      const data = await payRes.json();
+      document.getElementById("badgePayoutCount").textContent = (data.payouts || []).length;
+    }
+    const sumRes = await fetch(`${API_BASE}/api/admin/customer-summaries?limit=500`, { headers: authHeaders() });
+    if (sumRes.ok) {
+      const data = await sumRes.json();
+      document.getElementById("badgeSummariesCount").textContent = (data.customers || []).length;
+    }
+  } catch {}
+}
+
+// =============================================================
+// 1. OVERVIEW TAB
+// =============================================================
 async function loadOverview() {
-  const res = await fetch(`${API_BASE}/api/top-customers?limit=10`, { headers: authHeaders() });
-  const data = res.ok ? await res.json() : { customers: [] };
-  const customers = data.customers || [];
+  const container = document.getElementById("view-overview");
+  container.innerHTML = `<div style="padding:60px 0;text-align:center;color:var(--text-muted);">Refreshing executive dashboard telemetry…</div>`;
 
-  const totalSubmissions = customers.reduce((sum, c) => sum + c.submission_count, 0);
-  const totalApproved = customers.reduce((sum, c) => sum + (c.total_approved_lkr || 0), 0);
+  try {
+    const res = await fetch(`${API_BASE}/api/top-customers?limit=15`, { headers: authHeaders() });
+    if (res.status === 401) { token = null; location.reload(); return; }
+    const data = await res.json();
+    const customers = data.customers || [];
+    const stats = data.stats || {};
+    const recentDealers = data.recentDealers || [];
 
-  const rows = customers.map(c => `
-    <tr>
-      <td>${c.dealer_name || "—"}</td>
-      <td>${c.mobile_number}</td>
-      <td>${c.submission_count}</td>
-      <td>LKR ${(c.total_approved_lkr || 0).toFixed(2)}</td>
-      <td>${new Date(c.last_submission).toLocaleDateString()}</td>
-    </tr>
-  `).join("");
+    const totalApproved = stats.totalApprovedLkr ?? customers.reduce((sum, c) => sum + (c.total_approved_lkr || 0), 0);
+    const totalSubmissions = stats.totalSubmissions ?? customers.reduce((sum, c) => sum + c.submission_count, 0);
+    const totalDealers = stats.totalDealers ?? recentDealers.length;
+    const pendingPayouts = stats.pendingPayoutsLkr ?? 0;
 
-  document.getElementById("tab-overview").innerHTML = `
-    <div class="stat-grid">
-      <div class="stat-card"><div class="num">${customers.length}</div><div class="label">Active customers</div></div>
-      <div class="stat-card"><div class="num">${totalSubmissions}</div><div class="label">Total submissions (top 10)</div></div>
-      <div class="stat-card"><div class="num">LKR ${totalApproved.toFixed(0)}</div><div class="label">Approved rewards (top 10)</div></div>
-    </div>
-    <div class="panel">
-      <h3>Top Submitted Customers</h3>
-      <table>
-        <thead><tr><th>Dealer</th><th>Mobile</th><th>Submissions</th><th>Approved Reward</th><th>Last Submission</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="5" style="color:var(--muted);">No submissions yet.</td></tr>'}</tbody>
-      </table>
-    </div>
-  `;
-}
+    const customerRows = customers.map(c => `
+      <tr>
+        <td>
+          <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.mobile_number}')">${c.dealer_name || "Direct Customer"}</b>
+        </td>
+        <td class="mono"><b>${c.mobile_number}</b></td>
+        <td><b>${c.submission_count}</b> claims</td>
+        <td class="mono" style="font-weight:700;color:var(--primary);">LKR ${(c.total_approved_lkr || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem;">${c.last_submission ? new Date(c.last_submission).toLocaleDateString() : '—'}</td>
+        <td>
+          <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${c.mobile_number}')">View Profile</button>
+        </td>
+      </tr>
+    `).join("");
 
-// ============================================================
-// Staff Accounts
-// ============================================================
-async function loadStaff() {
-  const res = await fetch(`${API_BASE}/api/admin/staff`, { headers: authHeaders() });
-  if (res.status === 401) { localStorage.removeItem("adminToken"); location.reload(); return; }
-  const data = await res.json();
-  renderStaff(data.staff);
-}
+    const dealerRows = recentDealers.map(d => `
+      <tr>
+        <td class="mono" style="font-weight:700;color:var(--text);">${d.customer_code || '—'}</td>
+        <td>
+          <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${d.contact_phone || d.id}')">${d.name}</b>
+        </td>
+        <td>${d.city || '—'}</td>
+        <td class="mono">${d.contact_phone || '—'}</td>
+        <td>
+          <span class="chip ${d.active ? 'chip-success' : 'chip-muted'}">
+            <span class="chip-dot"></span>
+            ${d.active ? 'Active' : 'Inactive'}
+          </span>
+        </td>
+        <td>
+          <button class="btn btn-secondary btn-sm" onclick="openCustomerDetail('${d.contact_phone || d.id}')">Inspect Dossier</button>
+        </td>
+      </tr>
+    `).join("");
 
-function renderStaff(staff) {
-  const rows = staff.map(s => `
-    <tr>
-      <td>${s.username}</td>
-      <td><span class="role-badge">${s.role.replace("_"," ")}</span></td>
-      <td><span class="status-dot ${s.active ? "active" : "inactive"}"></span>${s.active ? "Active" : "Inactive"}</td>
-      <td class="row-actions">
-        <a data-action="reset" data-user="${s.username}">Reset password</a>
-        <a data-action="role" data-user="${s.username}" data-current="${s.role}">Change role</a>
-        <a data-action="toggle" data-user="${s.username}" data-active="${s.active}" class="${s.active ? "danger" : ""}">
-          ${s.active ? "Deactivate" : "Activate"}
-        </a>
-      </td>
-    </tr>
-  `).join("");
-
-  document.getElementById("tab-staff").innerHTML = `
-    <div class="panel">
-      <h3>Create Staff Account</h3>
-      <div class="form-row">
-        <input type="text" id="newUsername" placeholder="Username" />
-        <input type="password" id="newPassword" placeholder="Password (min 8 chars)" />
-        <select id="newRole">
-          <option value="finance_staff">Finance Staff (Reviewer)</option>
-          <option value="finance_lead">Finance Lead (Disbursement)</option>
-          <option value="admin">Admin</option>
-        </select>
-        <button id="createStaffBtn">Create</button>
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-info">
+          <h1>Executive Operations &amp; Rewards Overview</h1>
+          <p>Real-time telemetry, retailer network distribution, and settlement reserve status.</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-secondary btn-sm" onclick="loadOverview()">🔄 Refresh Metrics</button>
+          <button class="btn btn-primary btn-sm" onclick="document.querySelector('[data-tab=summaries]').click()">👥 View All Customer Summaries &rarr;</button>
+        </div>
       </div>
-      <div id="createStaffMsg" class="msg"></div>
-    </div>
-    <div class="panel">
-      <h3>Existing Staff</h3>
-      <table>
-        <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="4" style="color:var(--muted);">No staff accounts yet.</td></tr>'}</tbody>
-      </table>
-    </div>
-  `;
 
-  document.getElementById("createStaffBtn").addEventListener("click", createStaff);
-  document.querySelectorAll('[data-action="reset"]').forEach(el => el.addEventListener("click", () => resetPassword(el.dataset.user)));
-  document.querySelectorAll('[data-action="role"]').forEach(el => el.addEventListener("click", () => changeRole(el.dataset.user, el.dataset.current)));
-  document.querySelectorAll('[data-action="toggle"]').forEach(el => el.addEventListener("click", () => toggleActive(el.dataset.user, el.dataset.active === "true")));
+      <div class="stat-grid">
+        <div class="stat-card primary">
+          <div class="stat-label">B2B Dealer Network <span>🏢</span></div>
+          <div class="stat-value">${totalDealers}</div>
+          <div class="stat-sub">Active registered retail hardware stores</div>
+        </div>
+        <div class="stat-card indigo">
+          <div class="stat-label">Verified Submissions <span>📑</span></div>
+          <div class="stat-value">${totalSubmissions}</div>
+          <div class="stat-sub">Invoice proofs submitted across channels</div>
+        </div>
+        <div class="stat-card success">
+          <div class="stat-label">Approved Rewards <span>💰</span></div>
+          <div class="stat-value mono">LKR ${Math.round(totalApproved).toLocaleString()}</div>
+          <div class="stat-sub">Total verified reward compensation</div>
+        </div>
+        <div class="stat-card warning">
+          <div class="stat-label">Pending Payout Queue <span>💳</span></div>
+          <div class="stat-value mono" style="color:var(--warning);">LKR ${Math.round(pendingPayouts).toLocaleString()}</div>
+          <div class="stat-sub">${stats.pendingPayoutsCount || 0} batches awaiting bank transfer</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🏢 Newly Registered Customer &amp; Dealer Master</div>
+          <button class="btn btn-secondary btn-sm" onclick="document.querySelector('[data-tab=customers]').click()">Manage Directory &rarr;</button>
+        </div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Dealer / Customer Name</th>
+                <th>City</th>
+                <th>Contact Phone</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${dealerRows || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">No customer master records found.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🏆 Top Reward Claimants</div>
+          <span style="font-size:0.8rem;color:var(--text-muted);">Highest volume submitting customers</span>
+        </div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Customer / Dealer</th>
+                <th>Mobile Number</th>
+                <th>Submissions</th>
+                <th>Total Approved</th>
+                <th>Last Active</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${customerRows || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">No claim submissions recorded yet.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<div class="banner err">Error loading dashboard metrics: ${err.message}</div>`;
+  }
 }
 
-async function createStaff() {
-  const username = document.getElementById("newUsername").value.trim();
-  const password = document.getElementById("newPassword").value;
-  const role = document.getElementById("newRole").value;
-  const msg = document.getElementById("createStaffMsg");
+// =============================================================
+// 2. CUSTOMER & DEALER MASTER TAB
+// =============================================================
+let cachedDealers = [];
 
-  const res = await fetch(`${API_BASE}/api/admin/staff`, {
-    method: "POST", headers: authHeaders(), body: JSON.stringify({ username, password, role })
-  });
-  const data = await res.json();
-  if (!res.ok) { msg.className = "msg err"; msg.textContent = data.error; return; }
-  msg.className = "msg ok"; msg.textContent = "Staff account created.";
-  loadStaff();
-}
-
-async function resetPassword(username) {
-  const password = prompt(`New password for ${username} (min 8 characters):`);
-  if (!password) return;
-  const res = await fetch(`${API_BASE}/api/admin/staff/${encodeURIComponent(username)}/reset-password`, {
-    method: "POST", headers: authHeaders(), body: JSON.stringify({ password })
-  });
-  const data = await res.json();
-  alert(res.ok ? "Password reset." : data.error);
-}
-
-async function changeRole(username, currentRole) {
-  const role = prompt(`New role for ${username} (admin / finance_staff / finance_lead):`, currentRole);
-  if (!role || role === currentRole) return;
-  const res = await fetch(`${API_BASE}/api/admin/staff/${encodeURIComponent(username)}/role`, {
-    method: "POST", headers: authHeaders(), body: JSON.stringify({ role })
-  });
-  const data = await res.json();
-  if (!res.ok) { alert(data.error); return; }
-  loadStaff();
-}
-
-async function toggleActive(username, isActive) {
-  if (!confirm(`${isActive ? "Deactivate" : "Activate"} ${username}?`)) return;
-  const res = await fetch(`${API_BASE}/api/admin/staff/${encodeURIComponent(username)}/active`, {
-    method: "POST", headers: authHeaders(), body: JSON.stringify({ active: !isActive })
-  });
-  const data = await res.json();
-  if (!res.ok) { alert(data.error); return; }
-  loadStaff();
-}
-
-// ============================================================
-// Customer Master (B2B Dealers)
-// ============================================================
 async function loadCustomers() {
-  const res = await fetch(`${API_BASE}/api/admin/dealers`, { headers: authHeaders() });
-  const data = await res.json();
-  renderCustomers(data.dealers || []);
+  const container = document.getElementById("view-customers");
+  container.innerHTML = `<div style="padding:60px 0;text-align:center;color:var(--text-muted);">Loading Customer Master directory…</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/dealers`, { headers: authHeaders() });
+    if (res.status === 401) { token = null; location.reload(); return; }
+    const data = await res.json();
+    cachedDealers = data.dealers || [];
+    renderCustomersTable(cachedDealers);
+    updateHeaderCounts();
+  } catch (err) {
+    container.innerHTML = `<div class="banner err">Failed to load Customer Master: ${err.message}</div>`;
+  }
 }
 
-function renderCustomers(dealers) {
+function renderCustomersTable(dealers) {
   const rows = dealers.map(d => `
     <tr>
-      <td>${d.customer_code || "—"}</td>
-      <td>${d.name}</td>
-      <td>${d.contact_phone || "—"}</td>
-      <td>${d.city || "—"}</td>
-      <td><span class="status-dot ${d.active ? "active" : "inactive"}"></span>${d.active ? "Active" : "Inactive"}</td>
-      <td class="row-actions">
-        <a onclick='editCustomer(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Edit</a>
-        ${d.active ? `<a class="danger" onclick="deleteCustomer('${d.id}')">Delete</a>` : ""}
+      <td class="mono" style="font-weight:700;">${d.customer_code || '—'}</td>
+      <td>
+        <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${d.contact_phone || d.id}')">${d.name}</b>
+        ${d.address ? `<div style="font-size:0.75rem;color:var(--text-muted);">${d.address}</div>` : ''}
+      </td>
+      <td class="mono"><b>${d.contact_phone || '—'}</b></td>
+      <td>${d.city || '—'}</td>
+      <td>
+        ${d.latitude != null ? `<span class="chip chip-success"><span class="chip-dot"></span>Geofenced</span>` : '<span style="color:var(--text-subtle);">—</span>'}
+      </td>
+      <td>
+        <span class="chip ${d.active ? 'chip-success' : 'chip-muted'}">
+          <span class="chip-dot"></span>
+          ${d.active ? 'Active' : 'Inactive'}
+        </span>
+      </td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${d.contact_phone || d.id}')">Inspect</button>
+          <button class="btn btn-secondary btn-sm" onclick='editCustomer(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Edit</button>
+          ${d.active ? `<button class="btn btn-danger btn-sm" onclick="deleteCustomer('${d.id}')">Deactivate</button>` : ''}
+        </div>
       </td>
     </tr>
   `).join("");
 
-  document.getElementById("tab-customers").innerHTML = `
-    <div class="panel">
-      <h3>Add / Bulk Upload B2B Customers</h3>
-      <div class="form-row">
-        <input type="text" id="custCode" placeholder="Customer Code" />
-        <input type="text" id="custName" placeholder="Customer / Dealer Name" />
-        <input type="text" id="custPhone" placeholder="Contact Phone" />
+  document.getElementById("view-customers").innerHTML = `
+    <div class="page-header">
+      <div class="page-header-info">
+        <h1>Customer &amp; Dealer Master Directory</h1>
+        <p>Register retail hardware partners, specify contact phone numbers, and configure fraud-prevention GPS geofencing.</p>
       </div>
-      <div class="form-row">
-        <input type="text" id="custAddress" placeholder="Address" />
-        <input type="text" id="custCity" placeholder="City" />
-      </div>
-      <div class="form-row">
-        <input type="text" id="custLocation" placeholder="Location: paste Google Maps link or lat, lng (e.g. 6.9271, 79.8612)" style="flex:1;min-width:280px;" />
-      </div>
-      <div class="form-row">
-        <button onclick="createCustomer()">Add Customer</button>
-        <label class="secondary" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#374151;color:#fff;border-radius:8px;cursor:pointer;">
-          Upload Excel / CSV
+      <div class="page-header-actions">
+        <button class="btn btn-primary" onclick="openAddCustomerModal()">+ Add New Customer</button>
+        <label class="btn btn-secondary" style="cursor:pointer;">
+          📥 Bulk Upload Excel (.xlsx)
           <input type="file" id="custExcelInput" accept=".xlsx,.xls,.csv" style="display:none;" />
         </label>
       </div>
-      <div id="custMsg" class="msg"></div>
-      <p style="color:var(--muted);font-size:0.85rem;">
-        <b>Location is optional.</b> Paste a Google Maps share link or <code>latitude, longitude</code> — no need to split lat/lng columns.
-        Excel/CSV headers: <code>customerCode, name, contactPhone, address, city, location</code>
-        (or legacy <code>latitude, longitude</code>). Rows without a recognised location are still saved; geofence will be skipped for them.
-      </p>
     </div>
-    <div class="panel">
-      <h3>Customer Master (${dealers.length})</h3>
-      <table>
-        <thead><tr><th>Code</th><th>Name</th><th>Phone</th><th>City</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" style="color:var(--muted);">No customers yet.</td></tr>'}</tbody>
-      </table>
+
+    <!-- Search & Filter Bar -->
+    <div class="toolbar">
+      <div class="search-wrapper">
+        <input type="text" id="custSearchInput" placeholder="🔍 Search customer code, name, city, or phone…" oninput="filterCustomerTable()" />
+      </div>
+      <div style="font-size:0.82rem;color:var(--text-muted);">
+        Showing <b id="custFilteredCount">${dealers.length}</b> customer master records
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Customer / Dealer Name</th>
+              <th>Contact Phone</th>
+              <th>City</th>
+              <th>Geofence</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="custTableBody">
+            ${rows || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:36px;">No customer records found.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
     </div>
   `;
 
-  document.getElementById("custExcelInput").addEventListener("change", (e) => handleBulkUpload(e, "dealers"));
+  document.getElementById("custExcelInput")?.addEventListener("change", (e) => handleBulkUpload(e, "dealers"));
 }
 
-async function createCustomer() {
-  const body = {
-    customerCode: document.getElementById("custCode").value.trim() || undefined,
-    name: document.getElementById("custName").value.trim(),
-    contactPhone: document.getElementById("custPhone").value.trim() || undefined,
-    address: document.getElementById("custAddress").value.trim() || undefined,
-    city: document.getElementById("custCity").value.trim() || undefined,
-    location: document.getElementById("custLocation").value.trim() || undefined,
-  };
-  const msg = document.getElementById("custMsg");
-  if (!body.name) { msg.className = "msg err"; msg.textContent = "Customer name is required."; return; }
-
-  const res = await fetch(`${API_BASE}/api/admin/dealers`, {
-    method: "POST", headers: authHeaders(), body: JSON.stringify(body)
+function filterCustomerTable() {
+  const q = document.getElementById("custSearchInput").value.trim().toLowerCase();
+  const filtered = cachedDealers.filter(d => {
+    return (d.name || "").toLowerCase().includes(q) ||
+           (d.customer_code || "").toLowerCase().includes(q) ||
+           (d.contact_phone || "").toLowerCase().includes(q) ||
+           (d.city || "").toLowerCase().includes(q);
   });
-  const data = await res.json();
-  if (!res.ok) { msg.className = "msg err"; msg.textContent = data.error; return; }
-  const locNote = data.latitude != null ? ` (location: ${data.latitude.toFixed(5)}, ${data.longitude.toFixed(5)})` : " (no coordinates)";
-  msg.className = "msg ok"; msg.textContent = "Customer added." + locNote;
-  loadCustomers();
+  document.getElementById("custFilteredCount").textContent = filtered.length;
+  const tbody = document.getElementById("custTableBody");
+  if (!tbody) return;
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:36px;">No matching records found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(d => `
+    <tr>
+      <td class="mono" style="font-weight:700;">${d.customer_code || '—'}</td>
+      <td>
+        <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${d.contact_phone || d.id}')">${d.name}</b>
+        ${d.address ? `<div style="font-size:0.75rem;color:var(--text-muted);">${d.address}</div>` : ''}
+      </td>
+      <td class="mono"><b>${d.contact_phone || '—'}</b></td>
+      <td>${d.city || '—'}</td>
+      <td>
+        ${d.latitude != null ? `<span class="chip chip-success"><span class="chip-dot"></span>Geofenced</span>` : '<span style="color:var(--text-subtle);">—</span>'}
+      </td>
+      <td>
+        <span class="chip ${d.active ? 'chip-success' : 'chip-muted'}">
+          <span class="chip-dot"></span>
+          ${d.active ? 'Active' : 'Inactive'}
+        </span>
+      </td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${d.contact_phone || d.id}')">Inspect</button>
+          <button class="btn btn-secondary btn-sm" onclick='editCustomer(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Edit</button>
+          ${d.active ? `<button class="btn btn-danger btn-sm" onclick="deleteCustomer('${d.id}')">Deactivate</button>` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join("");
 }
 
-function editCustomer(dealer) {
+function openAddCustomerModal() {
+  document.getElementById("newCustCode").value = "";
+  document.getElementById("newCustName").value = "";
+  document.getElementById("newCustPhone").value = "";
+  document.getElementById("newCustCity").value = "";
+  document.getElementById("newCustAddress").value = "";
+  document.getElementById("newCustLocation").value = "";
+  document.getElementById("newCustError").className = "banner";
+  document.getElementById("addCustomerModal").classList.add("active");
+}
+
+function closeAddCustomerModal() {
+  document.getElementById("addCustomerModal").classList.remove("active");
+}
+
+async function submitCreateCustomer() {
+  const body = {
+    customerCode: document.getElementById("newCustCode").value.trim() || undefined,
+    name: document.getElementById("newCustName").value.trim(),
+    contactPhone: document.getElementById("newCustPhone").value.trim() || undefined,
+    address: document.getElementById("newCustAddress").value.trim() || undefined,
+    city: document.getElementById("newCustCity").value.trim() || undefined,
+    location: document.getElementById("newCustLocation").value.trim() || undefined,
+  };
+  const errEl = document.getElementById("newCustError");
+  if (!body.name) {
+    errEl.className = "banner err";
+    errEl.textContent = "Customer name is required.";
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/dealers`, {
+      method: "POST", headers: authHeaders(), body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.className = "banner err";
+      errEl.textContent = data.error || "Failed to create customer.";
+      return;
+    }
+    closeAddCustomerModal();
+    loadCustomers();
+    // Also update summaries count
+    updateHeaderCounts();
+  } catch (err) {
+    errEl.className = "banner err";
+    errEl.textContent = err.message;
+  }
+}
+
+async function editCustomer(dealer) {
   const name = prompt("Customer name:", dealer.name);
   if (name === null) return;
   const contactPhone = prompt("Contact phone:", dealer.contact_phone || "");
   const city = prompt("City:", dealer.city || "");
-  fetch(`${API_BASE}/api/admin/dealers/${dealer.id}`, {
-    method: "PATCH", headers: authHeaders(), body: JSON.stringify({ name, contactPhone, city })
-  }).then(() => loadCustomers());
+  const location = prompt("Location link or coordinates (lat, lng):", dealer.latitude ? `${dealer.latitude}, ${dealer.longitude}` : "");
+
+  await fetch(`${API_BASE}/api/admin/dealers/${dealer.id}`, {
+    method: "PATCH", headers: authHeaders(),
+    body: JSON.stringify({ name, contactPhone: contactPhone || null, city: city || null, location: location || undefined })
+  });
+  loadCustomers();
 }
 
 async function deleteCustomer(id) {
-  if (!confirm("Deactivate this customer? Historical submissions are kept.")) return;
+  if (!confirm("Deactivate this customer? Historical claims and audit logs are preserved.")) return;
   await fetch(`${API_BASE}/api/admin/dealers/${id}`, { method: "DELETE", headers: authHeaders() });
   loadCustomers();
 }
 
-// ============================================================
-// Item Master (Products)
-// ============================================================
-async function loadItems() {
-  const res = await fetch(`${API_BASE}/api/admin/products`, { headers: authHeaders() });
-  const data = await res.json();
-  renderItems(data.products || []);
+// =============================================================
+// 3. CUSTOMER SUMMARIES & LEDGER TAB (NEW DEDICATED TAB)
+// Solves "newly created customer summary details are not loading"
+// =============================================================
+let cachedSummariesData = [];
+let summariesFilter = "ALL";
+
+async function loadCustomerSummaries() {
+  const container = document.getElementById("view-summaries");
+  container.innerHTML = `<div style="padding:60px 0;text-align:center;color:var(--text-muted);">Loading 360° customer ledger and reward summaries…</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/customer-summaries?limit=500`, { headers: authHeaders() });
+    if (res.status === 401) { token = null; location.reload(); return; }
+    const data = await res.json();
+    cachedSummariesData = data.customers || [];
+    renderSummariesView(data);
+    updateHeaderCounts();
+  } catch (err) {
+    container.innerHTML = `<div class="banner err">Error loading customer summaries: ${err.message}</div>`;
+  }
 }
 
-function renderItems(products) {
-  const rows = products.map(p => `
+function renderSummariesView(data) {
+  const customers = data.customers || [];
+  const totals = data.totals || {};
+  const threshold = data.threshold || 1000;
+
+  const filtered = cachedSummariesData.filter(c => {
+    if (summariesFilter === "DEALERS") return c.is_dealer;
+    if (summariesFilter === "ELIGIBLE") return c.payout_eligible;
+    if (summariesFilter === "BANK") return c.has_bank;
+    if (summariesFilter === "PENDING_PAYOUT") return c.pending_payout_count > 0;
+    return true;
+  });
+
+  const rows = filtered.map(c => {
+    const isNew = c.is_new_dealer;
+    return `
+      <tr>
+        <td>
+          <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">${c.dealer_name}</b>
+          ${c.customer_code && c.customer_code !== '—' ? `<div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${c.customer_code}</div>` : ''}
+        </td>
+        <td class="mono">
+          <b>${c.mobile_number !== '—' ? c.mobile_number : '<span style="color:var(--text-subtle);">No Phone</span>'}</b>
+        </td>
+        <td>${c.city || '—'}</td>
+        <td>
+          ${isNew ? `
+            <span class="chip chip-indigo"><span class="chip-dot"></span>New Registered Master</span>
+          ` : `
+            <b>${c.total_submissions}</b> <span style="font-size:0.75rem;color:var(--text-muted);">(✓ ${c.approved_count} app / ⏳ ${c.pending_count} rev)</span>
+          `}
+        </td>
+        <td class="mono">
+          <b>LKR ${(c.approved_lkr || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</b>
+        </td>
+        <td class="mono" style="font-size:0.95rem;font-weight:700;color:var(--primary);">
+          LKR ${(c.wallet_balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+        </td>
+        <td>
+          ${c.has_bank ? `
+            <span class="chip chip-success"><span class="chip-dot"></span>Bank Saved</span>
+            <div style="font-size:0.72rem;color:var(--text-muted);">${c.bank_name || ''}</div>
+          ` : `
+            <span class="chip chip-warning"><span class="chip-dot"></span>No Bank</span>
+          `}
+        </td>
+        <td>
+          ${c.payout_eligible ? `
+            <span class="chip chip-success"><span class="chip-dot"></span>Eligible (&ge; ${threshold})</span>
+          ` : isNew ? `
+            <span class="chip chip-muted"><span class="chip-dot"></span>Ready</span>
+          ` : `
+            <span class="chip chip-muted"><span class="chip-dot"></span>Accumulating</span>
+          `}
+        </td>
+        <td>
+          <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">View Profile</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  document.getElementById("view-summaries").innerHTML = `
+    <div class="page-header">
+      <div class="page-header-info">
+        <h1>Customer Intelligence &amp; Summaries Ledger</h1>
+        <p>Complete 360° financial dossier across retail stores, newly registered dealers, and consumer claimants.</p>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-secondary btn-sm" onclick="loadCustomerSummaries()">🔄 Refresh Ledger</button>
+        <button class="btn btn-primary btn-sm" onclick="exportSummariesCsv()">📥 Export Ledger CSV</button>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card primary">
+        <div class="stat-label">Total Accounts <span>👥</span></div>
+        <div class="stat-value">${totals.customers || customers.length}</div>
+        <div class="stat-sub">${totals.dealers_count || 0} registered dealer master accounts</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-label">Approved Rewards <span>🏆</span></div>
+        <div class="stat-value mono">LKR ${Math.round(totals.approved_lkr || 0).toLocaleString()}</div>
+        <div class="stat-sub">Audited and approved rewards</div>
+      </div>
+      <div class="stat-card indigo">
+        <div class="stat-label">Total Wallet Balances <span>👛</span></div>
+        <div class="stat-value mono">LKR ${Math.round(totals.wallet_balance_lkr || 0).toLocaleString()}</div>
+        <div class="stat-sub">${totals.eligible || 0} customer wallets ready for payout</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-label">Pending Claim Audits <span>⏳</span></div>
+        <div class="stat-value mono">LKR ${Math.round(totals.pending_lkr || 0).toLocaleString()}</div>
+        <div class="stat-sub">Currently under review by finance</div>
+      </div>
+    </div>
+
+    <!-- Filter Toolbar -->
+    <div class="toolbar">
+      <div class="pill-filter-group">
+        <button class="pill-filter-btn ${summariesFilter === 'ALL' ? 'active' : ''}" onclick="setSummariesFilter('ALL')">All Accounts (${cachedSummariesData.length})</button>
+        <button class="pill-filter-btn ${summariesFilter === 'DEALERS' ? 'active' : ''}" onclick="setSummariesFilter('DEALERS')">Retail Dealers Only</button>
+        <button class="pill-filter-btn ${summariesFilter === 'ELIGIBLE' ? 'active' : ''}" onclick="setSummariesFilter('ELIGIBLE')">Eligible for Payout (≥ ${threshold})</button>
+        <button class="pill-filter-btn ${summariesFilter === 'BANK' ? 'active' : ''}" onclick="setSummariesFilter('BANK')">Bank Saved</button>
+        <button class="pill-filter-btn ${summariesFilter === 'PENDING_PAYOUT' ? 'active' : ''}" onclick="setSummariesFilter('PENDING_PAYOUT')">In Payout Batch</button>
+      </div>
+      <div class="search-wrapper">
+        <input type="text" id="summariesSearchInput" placeholder="🔍 Search by name, code, mobile, or city…" oninput="filterSummariesLive()" />
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Customer / Dealer Name</th>
+              <th>Contact Phone</th>
+              <th>City</th>
+              <th>Submissions</th>
+              <th>Approved LKR</th>
+              <th>Wallet Balance</th>
+              <th>Bank Account</th>
+              <th>Payout Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="summariesTableBody">
+            ${rows || '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:36px;">No customers found under current filter.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function setSummariesFilter(filter) {
+  summariesFilter = filter;
+  loadCustomerSummaries();
+}
+
+function filterSummariesLive() {
+  const q = document.getElementById("summariesSearchInput").value.trim().toLowerCase();
+  const filtered = cachedSummariesData.filter(c => {
+    return (c.dealer_name || "").toLowerCase().includes(q) ||
+           (c.customer_code || "").toLowerCase().includes(q) ||
+           (c.mobile_number || "").toLowerCase().includes(q) ||
+           (c.city || "").toLowerCase().includes(q);
+  });
+  const tbody = document.getElementById("summariesTableBody");
+  if (!tbody) return;
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:36px;">No matching records found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(c => `
     <tr>
-      <td>${p.id}</td>
-      <td>${p.name}</td>
-      <td>${p.unit_label}</td>
-      <td>LKR ${p.current_rate ?? 0}</td>
-      <td><span class="status-dot ${p.active ? "active" : "inactive"}"></span>${p.active ? "Active" : "Inactive"}</td>
-      <td class="row-actions">
-        <a onclick='editItem(${JSON.stringify(p).replace(/'/g, "&apos;")})'>Edit</a>
-        ${p.active ? `<a class="danger" onclick="deleteItem('${p.id}')">Delete</a>` : ""}
+      <td>
+        <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">${c.dealer_name}</b>
+        ${c.customer_code && c.customer_code !== '—' ? `<div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${c.customer_code}</div>` : ''}
+      </td>
+      <td class="mono">
+        <b>${c.mobile_number !== '—' ? c.mobile_number : '<span style="color:var(--text-subtle);">No Phone</span>'}</b>
+      </td>
+      <td>${c.city || '—'}</td>
+      <td>
+        ${c.is_new_dealer ? `
+          <span class="chip chip-indigo"><span class="chip-dot"></span>New Registered Master</span>
+        ` : `
+          <b>${c.total_submissions}</b> <span style="font-size:0.75rem;color:var(--text-muted);">(✓ ${c.approved_count} app)</span>
+        `}
+      </td>
+      <td class="mono">
+        <b>LKR ${(c.approved_lkr || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</b>
+      </td>
+      <td class="mono" style="font-size:0.95rem;font-weight:700;color:var(--primary);">
+        LKR ${(c.wallet_balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+      </td>
+      <td>
+        ${c.has_bank ? `
+          <span class="chip chip-success"><span class="chip-dot"></span>Bank Saved</span>
+        ` : `
+          <span class="chip chip-warning"><span class="chip-dot"></span>No Bank</span>
+        `}
+      </td>
+      <td>
+        ${c.payout_eligible ? `
+          <span class="chip chip-success"><span class="chip-dot"></span>Eligible</span>
+        ` : `
+          <span class="chip chip-muted"><span class="chip-dot"></span>Accumulating</span>
+        `}
+      </td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">View Profile</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function exportSummariesCsv() {
+  if (!cachedSummariesData.length) return alert("No customer records to export.");
+  const headers = ["Customer Name", "Customer Code", "Mobile / Phone", "City", "Submissions", "Approved LKR", "Wallet Balance LKR", "Bank Account", "Bank Name", "Payout Eligible"];
+  const rows = cachedSummariesData.map(c => [
+    `"${c.dealer_name || ''}"`,
+    `"${c.customer_code || ''}"`,
+    `"${c.mobile_number || ''}"`,
+    `"${c.city || ''}"`,
+    c.total_submissions,
+    c.approved_lkr,
+    c.wallet_balance,
+    c.has_bank ? "YES" : "NO",
+    `"${c.bank_name || ''}"`,
+    c.payout_eligible ? "YES" : "NO"
+  ]);
+  const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+  downloadFile(csv, `cantec_customers_ledger_${new Date().toISOString().slice(0,10)}.csv`, "text/csv");
+}
+
+// =============================================================
+// 4. PAYOUT MANAGEMENT TAB (RESPONSIVE, FULLY FUNCTIONAL)
+// Solves "admin panel payout tab wonr responce .. link break"
+// =============================================================
+let currentPayoutsFilter = "ALL";
+let cachedPayoutsData = null;
+
+async function loadPayouts() {
+  const container = document.getElementById("view-payouts");
+  container.innerHTML = `<div style="padding:60px 0;text-align:center;color:var(--text-muted);">Loading financial disbursement &amp; payout ledger…</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/payouts?status=${currentPayoutsFilter}`, { headers: authHeaders() });
+    if (res.status === 401) { token = null; location.reload(); return; }
+    const data = await res.json();
+    cachedPayoutsData = data;
+    renderPayoutsView(data);
+    updateHeaderCounts();
+  } catch (err) {
+    container.innerHTML = `<div class="banner err">Error loading payouts: ${err.message}</div>`;
+  }
+}
+
+function renderPayoutsView(data) {
+  const payouts = data.payouts || [];
+  const eligible = data.eligible || [];
+  const stats = data.stats || {};
+  const threshold = data.threshold || 1000;
+
+  const totalPendingLkr = payouts.filter(p => p.status === "PENDING").reduce((s, p) => s + Number(p.amount_lkr || 0), 0);
+  const totalPaidLkr = payouts.filter(p => p.status === "PAID").reduce((s, p) => s + Number(p.amount_lkr || 0), 0);
+
+  const payoutRows = payouts.map(p => {
+    const isPending = p.status === "PENDING";
+    const hasBank = !!p.account_number;
+    return `
+      <tr>
+        <td class="mono"><b>#${p.id}</b></td>
+        <td>
+          <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${p.mobile_number}')">${p.mobile_number}</b>
+          ${p.account_name ? `<div style="font-size:0.75rem;color:var(--text-muted);">${p.account_name}</div>` : ''}
+        </td>
+        <td class="mono">
+          <b style="font-size:1rem;color:${isPending ? 'var(--warning)' : 'var(--success)'};">
+            LKR ${Number(p.amount_lkr).toLocaleString(undefined, {minimumFractionDigits: 2})}
+          </b>
+        </td>
+        <td>
+          ${hasBank ? `
+            <div style="font-weight:600;font-size:0.8rem;">${p.bank_name || 'Bank'} · ${p.branch_name || 'Branch'}</div>
+            <div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${p.account_number}</div>
+          ` : `
+            <span class="chip chip-warning"><span class="chip-dot"></span>No Bank Saved</span>
+          `}
+        </td>
+        <td>
+          <span class="chip ${isPending ? 'chip-warning' : 'chip-success'}">
+            <span class="chip-dot"></span>
+            ${p.status}
+          </span>
+        </td>
+        <td class="mono" style="font-size:0.78rem;">
+          ${p.erp_reference ? `ERP: <b>${p.erp_reference}</b><br>Bank: ${p.bank_reference || '—'}` : '<span style="color:var(--text-subtle);">Unbound</span>'}
+        </td>
+        <td>
+          ${isPending ? `
+            <button class="btn btn-primary btn-sm" onclick="openPayoutModal(${p.id}, '${p.mobile_number}', ${p.amount_lkr}, ${hasBank})">
+              Bind &amp; Mark Paid
+            </button>
+          ` : `
+            <span style="font-size:0.75rem;color:var(--text-muted);">Paid on ${new Date(p.bound_at || p.created_at).toLocaleDateString()}</span>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  const eligibleRows = eligible.map(e => `
+    <tr>
+      <td class="mono"><b>${e.mobile_number}</b></td>
+      <td class="mono" style="color:var(--primary);font-weight:700;font-size:1rem;">
+        LKR ${Number(e.balance_lkr).toLocaleString(undefined, {minimumFractionDigits: 2})}
+      </td>
+      <td>${e.has_bank ? '<span class="chip chip-success"><span class="chip-dot"></span>Registered</span>' : '<span class="chip chip-warning"><span class="chip-dot"></span>Missing</span>'}</td>
+      <td>${e.pending_payouts ? `<span class="chip chip-warning"><span class="chip-dot"></span>In Batch (${e.pending_payouts})</span>` : '<span class="chip chip-success">Ready to Batch</span>'}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${e.mobile_number}')">View Profile</button>
       </td>
     </tr>
   `).join("");
 
-  document.getElementById("tab-items").innerHTML = `
-    <div class="panel">
-      <h3>Add / Bulk Upload Items</h3>
-      <div class="form-row">
-        <input type="text" id="itemCode" placeholder="Item Code" />
-        <input type="text" id="itemName" placeholder="Item Name (e.g. Wall Putty 25kg)" />
-        <input type="text" id="itemUnit" placeholder="Unit Label (default: bag)" />
-        <input type="number" step="0.01" id="itemRate" placeholder="Reward Rate (LKR)" />
+  document.getElementById("view-payouts").innerHTML = `
+    <div class="page-header">
+      <div class="page-header-info">
+        <h1>Payout &amp; Settlement Ledger</h1>
+        <p>Authorize customer reward payments, bind corporate ERP vouchers, and export commercial bank transfer manifests.</p>
       </div>
-      <div class="form-row">
-        <button onclick="createItem()">Add Item</button>
-        <label class="secondary" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#374151;color:#fff;border-radius:8px;cursor:pointer;">
-          Upload Excel (.xlsx)
+      <div class="page-header-actions">
+        <button class="btn btn-secondary btn-sm" onclick="triggerRebuildWallets()">🔄 Sync Wallets from Claims</button>
+        <button class="btn btn-primary btn-sm" onclick="exportPayoutsCsv()">📥 Export Bank CSV Manifest</button>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card warning">
+        <div class="stat-label">Pending Disbursements <span>⏳</span></div>
+        <div class="stat-value mono" style="color:var(--warning);">LKR ${Math.round(totalPendingLkr).toLocaleString()}</div>
+        <div class="stat-sub">${stats.pendingPayouts || 0} customer batches awaiting transfer</div>
+      </div>
+      <div class="stat-card primary">
+        <div class="stat-label">Eligible Wallets (&ge; LKR ${threshold}) <span>👛</span></div>
+        <div class="stat-value">${stats.walletsOverThreshold || eligible.length}</div>
+        <div class="stat-sub">Customer accounts over payout threshold</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-label">Total Disbursed (Settled) <span>✓</span></div>
+        <div class="stat-value mono" style="color:var(--success);">LKR ${Math.round(totalPaidLkr).toLocaleString()}</div>
+        <div class="stat-sub">Completed payments with ERP reference</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="pill-filter-group">
+        <button class="pill-filter-btn ${currentPayoutsFilter === 'ALL' ? 'active' : ''}" onclick="setPayoutFilter('ALL')">All Batches (${payouts.length})</button>
+        <button class="pill-filter-btn ${currentPayoutsFilter === 'PENDING' ? 'active' : ''}" onclick="setPayoutFilter('PENDING')">Pending Only</button>
+        <button class="pill-filter-btn ${currentPayoutsFilter === 'PAID' ? 'active' : ''}" onclick="setPayoutFilter('PAID')">Paid Only</button>
+      </div>
+      <span style="font-size:0.8rem;color:var(--text-muted);margin-left:auto;">
+        Configured payout threshold: <b>LKR ${threshold.toLocaleString()}</b>
+      </span>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Disbursement Ledger Batches (${payouts.length})</div>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Batch #</th>
+              <th>Customer Mobile</th>
+              <th>Amount (LKR)</th>
+              <th>Bank Account</th>
+              <th>Status</th>
+              <th>ERP / Bank Ref</th>
+              <th>Settlement Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${payoutRows || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:36px;">No payout records found under current filter.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">👛 Customers Eligible for Payout (Balance &ge; LKR ${threshold})</div>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Mobile Number</th>
+              <th>Wallet Balance</th>
+              <th>Bank Details</th>
+              <th>Batch Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${eligibleRows || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">No customer wallets currently over threshold.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function setPayoutFilter(status) {
+  currentPayoutsFilter = status;
+  loadPayouts();
+}
+
+async function triggerRebuildWallets() {
+  if (!confirm("Recalculate all customer wallets from approved claim history and refresh pending payout batches?")) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/payouts/rebuild`, {
+      method: "POST", headers: authHeaders()
+    });
+    const data = await res.json();
+    alert(`Sync completed! ${data.walletsUpserted || 0} wallets updated, ${data.overThreshold || 0} over threshold.`);
+    loadPayouts();
+  } catch (e) {
+    alert("Rebuild failed: " + e.message);
+  }
+}
+
+function openPayoutModal(id, mobile, amount, hasBank) {
+  if (!hasBank) {
+    alert(`Customer ${mobile} has not yet registered their bank account details in the tracking portal.\n\nPlease request them to enter bank details before binding payment.`);
+    return;
+  }
+  activePayoutId = id;
+  document.getElementById("modalErpRef").value = `ERP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  document.getElementById("modalBankRef").value = `CEFT-${Math.floor(100000 + Math.random() * 900000)}`;
+  document.getElementById("modalPayoutError").className = "banner";
+  document.getElementById("payoutModal").classList.add("active");
+}
+
+function closePayoutModal() {
+  document.getElementById("payoutModal").classList.remove("active");
+  activePayoutId = null;
+}
+
+document.getElementById("btnConfirmPayout").addEventListener("click", async () => {
+  if (!activePayoutId) return;
+  const erpReference = document.getElementById("modalErpRef").value.trim();
+  const bankReference = document.getElementById("modalBankRef").value.trim();
+  const msg = document.getElementById("modalPayoutError");
+
+  if (!erpReference || !bankReference) {
+    msg.className = "banner err";
+    msg.textContent = "Both ERP Voucher code and Bank Reference are required.";
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/payouts/${activePayoutId}/bind`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ erpReference, bankReference })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msg.className = "banner err";
+      msg.textContent = data.error || "Payment binding failed.";
+      return;
+    }
+    closePayoutModal();
+    loadPayouts();
+  } catch (err) {
+    msg.className = "banner err";
+    msg.textContent = err.message;
+  }
+});
+
+function exportPayoutsCsv() {
+  if (!cachedPayoutsData?.payouts?.length) return alert("No payout data available to export.");
+  const headers = ["Batch ID", "Customer Mobile", "Amount LKR", "Status", "Account Name", "Bank Name", "Branch", "Account Number", "ERP Reference", "Bank Reference", "Date"];
+  const rows = cachedPayoutsData.payouts.map(p => [
+    p.id,
+    `"${p.mobile_number}"`,
+    p.amount_lkr,
+    p.status,
+    `"${p.account_name || ''}"`,
+    `"${p.bank_name || ''}"`,
+    `"${p.branch_name || ''}"`,
+    `"${p.account_number || ''}"`,
+    `"${p.erp_reference || ''}"`,
+    `"${p.bank_reference || ''}"`,
+    p.created_at
+  ]);
+  const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+  downloadFile(csv, `cantec_payouts_${new Date().toISOString().slice(0,10)}.csv`, "text/csv");
+}
+
+// =============================================================
+// 5. ITEM MASTER TAB
+// =============================================================
+let cachedProducts = [];
+
+async function loadItems() {
+  const container = document.getElementById("view-items");
+  container.innerHTML = `<div style="padding:60px 0;text-align:center;color:var(--text-muted);">Loading Item Master catalog…</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/products`, { headers: authHeaders() });
+    if (res.status === 401) { token = null; location.reload(); return; }
+    const data = await res.json();
+    cachedProducts = data.products || [];
+    renderItemsTable(cachedProducts);
+  } catch (err) {
+    container.innerHTML = `<div class="banner err">Failed to load Item Master: ${err.message}</div>`;
+  }
+}
+
+function renderItemsTable(products) {
+  const rows = products.map(p => `
+    <tr>
+      <td class="mono" style="font-weight:700;">${p.item_code || p.id}</td>
+      <td><b>${p.name}</b></td>
+      <td>${p.unit_label || 'unit'}</td>
+      <td class="mono" style="font-weight:700;color:var(--primary);">LKR ${(p.current_rate ?? 0).toFixed(2)}</td>
+      <td>
+        <span class="chip ${p.active ? 'chip-success' : 'chip-muted'}">
+          <span class="chip-dot"></span>
+          ${p.active ? 'Active' : 'Inactive'}
+        </span>
+      </td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary btn-sm" onclick='editItem(${JSON.stringify(p).replace(/'/g, "&apos;")})'>Edit</button>
+          ${p.active ? `<button class="btn btn-danger btn-sm" onclick="deleteItem('${p.id}')">Deactivate</button>` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join("");
+
+  document.getElementById("view-items").innerHTML = `
+    <div class="page-header">
+      <div class="page-header-info">
+        <h1>Item Master &amp; Product Catalog</h1>
+        <p>Maintain eligible reward product SKUs, packaging units, and baseline compensation rates.</p>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-primary" onclick="openAddItemModal()">+ Add New Product</button>
+        <label class="btn btn-secondary" style="cursor:pointer;">
+          📥 Bulk Upload Excel (.xlsx)
           <input type="file" id="itemExcelInput" accept=".xlsx,.xls,.csv" style="display:none;" />
         </label>
       </div>
-      <div id="itemMsg" class="msg"></div>
-      <p style="color:var(--muted);font-size:0.85rem;">
-        Excel columns (header row required): <code>itemCode, name, unitLabel, rate</code>.
-        Matches existing items by <code>itemCode</code> and updates them (including rate, if changed); new codes are created.
-      </p>
     </div>
-    <div class="panel">
-      <h3>Item Master (${products.length})</h3>
-      <table>
-        <thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Current Rate</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" style="color:var(--muted);">No items yet.</td></tr>'}</tbody>
-      </table>
+
+    <div class="card">
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU / Code</th>
+              <th>Product Name</th>
+              <th>Packaging Unit</th>
+              <th>Current Rate</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:36px;">No products defined.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
     </div>
   `;
 
-  document.getElementById("itemExcelInput").addEventListener("change", (e) => handleBulkUpload(e, "items"));
+  document.getElementById("itemExcelInput")?.addEventListener("change", (e) => handleBulkUpload(e, "items"));
 }
 
-async function createItem() {
+function openAddItemModal() {
+  document.getElementById("newItemCode").value = "";
+  document.getElementById("newItemName").value = "";
+  document.getElementById("newItemUnit").value = "bag";
+  document.getElementById("newItemRate").value = "";
+  document.getElementById("newItemError").className = "banner";
+  document.getElementById("addItemModal").classList.add("active");
+}
+
+function closeAddItemModal() {
+  document.getElementById("addItemModal").classList.remove("active");
+}
+
+async function submitCreateItem() {
   const body = {
-    itemCode: document.getElementById("itemCode").value.trim() || undefined,
-    name: document.getElementById("itemName").value.trim(),
-    unitLabel: document.getElementById("itemUnit").value.trim() || undefined,
-    rate: parseFloat(document.getElementById("itemRate").value) || undefined,
+    itemCode: document.getElementById("newItemCode").value.trim() || undefined,
+    name: document.getElementById("newItemName").value.trim(),
+    unitLabel: document.getElementById("newItemUnit").value.trim() || undefined,
+    rate: parseFloat(document.getElementById("newItemRate").value) || undefined,
   };
-  const msg = document.getElementById("itemMsg");
-  if (!body.name) { msg.className = "msg err"; msg.textContent = "Item name is required."; return; }
+  const errEl = document.getElementById("newItemError");
+  if (!body.name) {
+    errEl.className = "banner err";
+    errEl.textContent = "Product name is required.";
+    return;
+  }
 
   const res = await fetch(`${API_BASE}/api/admin/items`, {
     method: "POST", headers: authHeaders(), body: JSON.stringify(body)
   });
-  const data = await res.json();
-  if (!res.ok) { msg.className = "msg err"; msg.textContent = data.error; return; }
-  msg.className = "msg ok"; msg.textContent = "Item added.";
-  loadItems();
-  loadRates();
+  if (res.ok) {
+    closeAddItemModal();
+    loadItems();
+  } else {
+    errEl.className = "banner err";
+    errEl.textContent = "Failed to add item.";
+  }
 }
 
 function editItem(product) {
   const name = prompt("Item name:", product.name);
   if (name === null) return;
-  const unitLabel = prompt("Unit label:", product.unit_label);
+  const unitLabel = prompt("Unit label:", product.unit_label || "unit");
   fetch(`${API_BASE}/api/admin/items/${product.id}`, {
     method: "PATCH", headers: authHeaders(), body: JSON.stringify({ name, unitLabel })
-  }).then(() => { loadItems(); loadRates(); });
+  }).then(() => loadItems());
 }
 
 async function deleteItem(id) {
-  if (!confirm("Deactivate this item? Historical submissions are kept.")) return;
+  if (!confirm("Deactivate this product? Historical claim records are preserved.")) return;
   await fetch(`${API_BASE}/api/admin/items/${id}`, { method: "DELETE", headers: authHeaders() });
   loadItems();
-  loadRates();
 }
 
-// ============================================================
-// Excel bulk upload (shared: dealers | items)
-// ============================================================
-function handleBulkUpload(event, kind) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const workbook = XLSX.read(e.target.result, { type: "array" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const raw = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-    const rows = kind === "dealers"
-      ? raw.map(r => ({
-          customerCode: String(r.customerCode || r.CustomerCode || "").trim(),
-          name: String(r.name || r.Name || "").trim(),
-          contactPhone: String(r.contactPhone || r.ContactPhone || "").trim() || undefined,
-          address: String(r.address || r.Address || "").trim() || undefined,
-          city: String(r.city || r.City || "").trim() || undefined,
-          // Prefer single "location" column (Maps link or "lat, lng"); fall back to separate lat/lng
-          location: String(r.location || r.Location || r.mapsLink || r.MapsLink || "").trim() || undefined,
-          latitude: parseFloat(r.latitude || r.Latitude) || undefined,
-          longitude: parseFloat(r.longitude || r.Longitude) || undefined,
-        }))
-      : raw.map(r => ({
-          itemCode: String(r.itemCode || r.ItemCode || "").trim(),
-          name: String(r.name || r.Name || "").trim(),
-          unitLabel: String(r.unitLabel || r.UnitLabel || "").trim() || undefined,
-          rate: r.rate !== undefined && r.rate !== "" ? parseFloat(r.rate || r.Rate) : undefined,
-        }));
-
-    const endpoint = kind === "dealers" ? "/api/admin/dealers/bulk" : "/api/admin/items/bulk";
-    const msgEl = document.getElementById(kind === "dealers" ? "custMsg" : "itemMsg");
-    msgEl.className = "msg"; msgEl.textContent = `Uploading ${rows.length} rows…`;
-
-    const res = await fetch(`${API_BASE}${endpoint}`, {
-      method: "POST", headers: authHeaders(), body: JSON.stringify({ rows })
-    });
-    const data = await res.json();
-    if (!res.ok) { msgEl.className = "msg err"; msgEl.textContent = data.error || "Upload failed."; return; }
-
-    const warnN = data.warnings?.length || 0;
-    msgEl.className = data.errors?.length ? "msg err" : "msg ok";
-    msgEl.textContent = `Created ${data.created}, updated ${data.updated}` +
-      (data.errors?.length ? `, ${data.errors.length} row(s) skipped` : "") +
-      (warnN ? `, ${warnN} location warning(s)` : "") + ".";
-    if (data.errors?.length) console.warn("Bulk upload row errors:", data.errors);
-    if (data.warnings?.length) console.warn("Bulk upload location warnings:", data.warnings);
-
-    if (kind === "dealers") loadCustomers(); else { loadItems(); loadRates(); }
-  };
-  reader.readAsArrayBuffer(file);
-  event.target.value = ""; // allow re-selecting the same file later
-}
-
-// ============================================================
-// Payout Rates
-// ============================================================
+// =============================================================
+// 6. PAYOUT RATES CONFIGURATION TAB
+// =============================================================
 async function loadRates() {
-  const res = await fetch(`${API_BASE}/api/admin/products`, { headers: authHeaders() });
-  const data = await res.json();
-  const rows = (data.products || []).map(p => `
-    <tr>
-      <td>${p.name}</td>
-      <td>LKR ${p.current_rate ?? 0} / ${p.unit_label}</td>
-      <td>
-        <input type="number" step="0.01" id="rate-${p.id}" placeholder="New rate" style="width:110px;" />
-        <button class="secondary" data-product="${p.id}" onclick="updateRate('${p.id}')">Update</button>
-      </td>
-    </tr>
-  `).join("");
-  document.getElementById("tab-rates").innerHTML = `
-    <div class="panel">
-      <h3>Reward Payout Rates</h3>
-      <table>
-        <thead><tr><th>Product</th><th>Current Rate</th><th>Update</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
+  const container = document.getElementById("view-rates");
+  container.innerHTML = `<div style="padding:60px 0;text-align:center;color:var(--text-muted);">Loading reimbursement rates…</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/products`, { headers: authHeaders() });
+    const data = await res.json();
+    const rows = (data.products || []).map(p => `
+      <tr>
+        <td><b>${p.name}</b></td>
+        <td>${p.unit_label || 'unit'}</td>
+        <td class="mono" style="font-weight:700;font-size:1rem;color:var(--primary);">
+          LKR ${(p.current_rate ?? 0).toFixed(2)}
+        </td>
+        <td>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="number" step="0.01" id="rate-${p.id}" placeholder="New rate" style="width:130px;" />
+            <button class="btn btn-primary btn-sm" onclick="updateRate('${p.id}')">Update Rate</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-info">
+          <h1>Product Reward &amp; Payout Rates</h1>
+          <p>Configure LKR compensation values credited to claimants per verified product unit.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Product SKU / Name</th>
+                <th>Packaging Unit</th>
+                <th>Active Rate</th>
+                <th>Modify Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:36px;">No products found.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<div class="banner err">${err.message}</div>`;
+  }
 }
 
 async function updateRate(productId) {
   const input = document.getElementById(`rate-${productId}`);
   const rate = parseFloat(input.value);
-  if (isNaN(rate) || rate < 0) { alert("Enter a valid rate."); return; }
+  if (isNaN(rate) || rate < 0) { alert("Please enter a valid rate amount."); return; }
   const res = await fetch(`${API_BASE}/api/admin/products/${productId}/rate`, {
     method: "POST", headers: authHeaders(), body: JSON.stringify({ rate })
   });
-  if (res.ok) loadRates(); else alert("Failed to update rate.");
+  if (res.ok) {
+    alert("Rate updated successfully!");
+    loadRates();
+  } else {
+    alert("Failed to update rate.");
+  }
 }
 
-// ============================================================
-// QR / URL Assets — rendered client-side (Level H error correction)
-// ============================================================
+// =============================================================
+// 7. STAFF ACCOUNTS TAB
+// =============================================================
+async function loadStaff() {
+  const container = document.getElementById("view-staff");
+  container.innerHTML = `<div style="padding:60px 0;text-align:center;color:var(--text-muted);">Loading staff access accounts…</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/staff`, { headers: authHeaders() });
+    if (res.status === 401) { token = null; location.reload(); return; }
+    const data = await res.json();
+    const staff = data.staff || [];
+
+    const rows = staff.map(s => `
+      <tr>
+        <td class="mono"><b>${s.username}</b></td>
+        <td>
+          <span class="chip chip-indigo"><span class="chip-dot"></span>${s.role.replace("_", " ")}</span>
+        </td>
+        <td>
+          <span class="chip ${s.active ? 'chip-success' : 'chip-muted'}">
+            <span class="chip-dot"></span>
+            ${s.active ? 'Active' : 'Inactive'}
+          </span>
+        </td>
+        <td style="font-size:0.8rem;color:var(--text-muted);">${new Date(s.created_at).toLocaleDateString()}</td>
+        <td>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-secondary btn-sm" onclick="changeRole('${s.username}', '${s.role}')">Change Role</button>
+            <button class="btn btn-secondary btn-sm" onclick="resetPassword('${s.username}')">Reset Password</button>
+            <button class="btn btn-secondary btn-sm" onclick="toggleActive('${s.username}', ${s.active})">${s.active ? 'Deactivate' : 'Activate'}</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-info">
+          <h1>Staff &amp; Operator Access Accounts</h1>
+          <p>Control system users, finance reviewers, and administrative authorization roles.</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="createStaffPrompt()">+ Add Staff User</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Account Status</th>
+                <th>Created</th>
+                <th>Security Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:36px;">No staff accounts.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<div class="banner err">${err.message}</div>`;
+  }
+}
+
+async function createStaffPrompt() {
+  const username = prompt("New username:");
+  if (!username) return;
+  const password = prompt("Initial password (min 8 characters):");
+  if (!password || password.length < 8) return alert("Password must be at least 8 characters.");
+  const role = prompt("Role (admin / finance_staff / finance_lead):", "finance_staff");
+  if (!role) return;
+
+  const res = await fetch(`${API_BASE}/api/admin/staff`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ username, password, role })
+  });
+  if (res.ok) {
+    alert("Staff user created!");
+    loadStaff();
+  } else {
+    const d = await res.json();
+    alert(d.error || "Failed to create staff user.");
+  }
+}
+
+async function resetPassword(username) {
+  const password = prompt(`New password for ${username} (min 8 characters):`);
+  if (!password || password.length < 8) return;
+  const res = await fetch(`${API_BASE}/api/admin/staff/${encodeURIComponent(username)}/reset-password`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ password })
+  });
+  alert(res.ok ? "Password reset successfully." : "Failed to reset password.");
+}
+
+async function changeRole(username, current) {
+  const role = prompt(`New role for ${username} (admin / finance_staff / finance_lead):`, current);
+  if (!role || role === current) return;
+  await fetch(`${API_BASE}/api/admin/staff/${encodeURIComponent(username)}/role`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ role })
+  });
+  loadStaff();
+}
+
+async function toggleActive(username, currentActive) {
+  await fetch(`${API_BASE}/api/admin/staff/${encodeURIComponent(username)}/active`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ active: !currentActive })
+  });
+  loadStaff();
+}
+
+// =============================================================
+// 8. QR / PORTAL ASSETS TAB
+// =============================================================
 async function loadQrTab() {
   const historyHtml = await fetchQrHistory();
-  document.getElementById("tab-qr").innerHTML = `
-    <div class="panel">
-      <h3>Generate Common Access QR / URL Asset</h3>
-      <div class="form-row">
-        <select id="qrType">
-          <option value="upload">Upload Portal QR</option>
-          <option value="track">Tracking Portal QR</option>
-        </select>
-        <input type="text" id="qrTargetUrl" placeholder="Target URL, e.g. https://rewards.company.com/upload" />
-        <button onclick="generateQr()">Generate QR</button>
+  document.getElementById("view-qr").innerHTML = `
+    <div class="page-header">
+      <div class="page-header-info">
+        <h1>Common Access QR &amp; Portal Assets</h1>
+        <p>Generate high-density vector QR codes for packaging, point-of-sale stands, and brochures.</p>
       </div>
-      <div id="qrMsg" class="msg"></div>
-      <div id="qrPreview"></div>
     </div>
-    <div class="panel">
-      <h3>Recent Requests</h3>
-      <table>
-        <thead><tr><th>Type</th><th>Target URL</th><th>Requested</th><th></th></tr></thead>
-        <tbody>${historyHtml}</tbody>
-      </table>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Generate High-Resolution Asset</div></div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Target Portal Destination</label>
+            <select id="qrType" onchange="updateQrPlaceholder()">
+              <option value="upload">Customer Claim Submission Portal</option>
+              <option value="track">Customer Claim Tracking Portal</option>
+            </select>
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label>Target URL</label>
+            <input type="text" id="qrTargetUrl" value="${window.location.origin}/" />
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="generateQr()">Generate Print Asset</button>
+        <div id="qrMsg" class="banner"></div>
+        <div id="qrPreview"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Generated Asset Audit History</div></div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr><th>Portal Type</th><th>Destination URL</th><th>Created At</th><th>Action</th></tr>
+          </thead>
+          <tbody>${historyHtml}</tbody>
+        </table>
+      </div>
     </div>
   `;
 }
 
+function updateQrPlaceholder() {
+  const type = document.getElementById("qrType").value;
+  const target = document.getElementById("qrTargetUrl");
+  if (type === "track") target.value = `${window.location.origin}/track.html`;
+  else target.value = `${window.location.origin}/`;
+}
+
 async function fetchQrHistory() {
-  const res = await fetch(`${API_BASE}/api/admin/qr-assets`, { headers: authHeaders() });
-  if (!res.ok) return '<tr><td colspan="4" style="color:var(--muted);">Could not load history.</td></tr>';
-  const data = await res.json();
-  if (!data.assets?.length) return '<tr><td colspan="4" style="color:var(--muted);">No requests yet.</td></tr>';
-  return data.assets.map(a => `
-    <tr>
-      <td>${a.asset_type}</td>
-      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.target_url}</td>
-      <td>${new Date(a.created_at).toLocaleString()}</td>
-      <td><a onclick="renderQr('${a.target_url.replace(/'/g, "&apos;")}')" style="cursor:pointer;color:var(--primary);">Re-render</a></td>
-    </tr>
-  `).join("");
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/qr-assets`, { headers: authHeaders() });
+    if (!res.ok) return '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">History unavailable.</td></tr>';
+    const data = await res.json();
+    if (!data.assets?.length) return '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">No QR assets recorded.</td></tr>';
+    return data.assets.map(a => `
+      <tr>
+        <td><b>${a.asset_type}</b></td>
+        <td class="mono" style="font-size:0.8rem;">${a.target_url}</td>
+        <td style="font-size:0.8rem;color:var(--text-muted);">${new Date(a.created_at).toLocaleString()}</td>
+        <td><button class="btn btn-outline btn-sm" onclick="renderQr('${a.target_url.replace(/'/g, "&apos;")}')">Re-render</button></td>
+      </tr>
+    `).join("");
+  } catch {
+    return '<tr><td colspan="4" style="color:red;padding:24px;">History unavailable.</td></tr>';
+  }
 }
 
 async function generateQr() {
   const assetType = document.getElementById("qrType").value;
   const targetUrl = document.getElementById("qrTargetUrl").value.trim();
   const msg = document.getElementById("qrMsg");
-  if (!targetUrl) { msg.className = "msg err"; msg.textContent = "Enter a target URL."; return; }
+  if (!targetUrl) { msg.className = "banner err"; msg.textContent = "Please enter target URL."; return; }
 
-  // Log the request for the audit trail (system_audit_log + qr_assets).
   await fetch(`${API_BASE}/api/admin/qr-assets`, {
     method: "POST", headers: authHeaders(),
     body: JSON.stringify({ assetType, targetUrl, format: "svg" })
   });
-
-  msg.className = "msg ok";
-  msg.textContent = "Generated below — download the format you need.";
   renderQr(targetUrl);
-  loadQrTab(); // refresh history table in the background on next tab visit
 }
 
-function renderQr(targetUrl) {
-  // Level H = highest error correction, per SRS §3 (durable on printed bag flaps).
-  const qr = qrcode(0, "H"); // typeNumber 0 = auto-detect smallest size that fits
-  qr.addData(targetUrl);
-  qr.make();
+function renderQr(url) {
+  try {
+    const qr = qrcode(0, 'H');
+    qr.addData(url);
+    qr.make();
+    const svgString = qr.createSvgTag(6, 0);
 
-  const cellSize = 6;
-  const margin = 4;
-  const svgMarkup = qr.createSvgTag(cellSize, margin);
-
-  const preview = document.getElementById("qrPreview");
-  preview.innerHTML = `
-    <div class="qr-preview">
-      <div class="qr-box" id="qrSvgHolder">${svgMarkup}</div>
-      <div class="qr-actions">
-        <button onclick="downloadQrSvg('${targetUrl.replace(/'/g, "&apos;")}')">Download SVG (factory print)</button>
-        <button class="secondary" onclick="downloadQrPng('${targetUrl.replace(/'/g, "&apos;")}')">Download PNG (marketing/dealer)</button>
-        <button class="secondary" onclick="printQrPdf()">Print / Save as PDF</button>
+    document.getElementById("qrPreview").innerHTML = `
+      <div class="qr-card-preview">
+        <div style="background:#fff;padding:12px;border-radius:8px;border:1px solid #e2e8f0;">
+          ${svgString}
+        </div>
+        <div class="mono" style="font-size:0.75rem;word-break:break-all;text-align:center;color:var(--text-muted);">${url}</div>
+        <button class="btn btn-secondary btn-sm" onclick="downloadQrSvg('${url}')">📥 Download Print-Ready SVG</button>
       </div>
+    `;
+  } catch (e) {
+    alert("Error rendering QR: " + e.message);
+  }
+}
+
+function downloadQrSvg(url) {
+  const qr = qrcode(0, 'H');
+  qr.addData(url);
+  qr.make();
+  const svg = qr.createSvgTag(8, 2);
+  downloadFile(svg, `cantec_qr_${Date.now()}.svg`, "image/svg+xml");
+}
+
+// =============================================================
+// CUSTOMER INTELLIGENCE DOSSIER (SLIDE-OVER DRAWER)
+// Completely loads newly created customer & dealer details!
+// =============================================================
+async function openCustomerDetail(mobileOrId) {
+  const drawer = document.getElementById("customerDrawer");
+  drawer.classList.add("active");
+  document.getElementById("drawerTitle").textContent = "Customer Dossier";
+  document.getElementById("drawerSubtitle").textContent = mobileOrId;
+  document.getElementById("drawerBody").innerHTML = `
+    <div style="padding:60px 0;text-align:center;color:var(--text-muted);">
+      Pulling customer ledger, wallet, and telemetry…
     </div>
   `;
-}
 
-function downloadQrSvg(targetUrl) {
-  const qr = qrcode(0, "H");
-  qr.addData(targetUrl);
-  qr.make();
-  const svgMarkup = qr.createSvgTag(8, 4);
-  const blob = new Blob([svgMarkup], { type: "image/svg+xml" });
-  triggerDownload(blob, "reward-qr.svg");
-}
-
-function downloadQrPng(targetUrl) {
-  const qr = qrcode(0, "H");
-  qr.addData(targetUrl);
-  qr.make();
-  const cellSize = 8;
-  const moduleCount = qr.getModuleCount();
-  const size = moduleCount * cellSize;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = "#000000";
-  for (let row = 0; row < moduleCount; row++) {
-    for (let col = 0; col < moduleCount; col++) {
-      if (qr.isDark(row, col)) ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/customers/${encodeURIComponent(mobileOrId)}`, { headers: authHeaders() });
+    if (!res.ok) {
+      document.getElementById("drawerBody").innerHTML = `
+        <div class="banner err" style="display:block;">Customer profile could not be loaded (${res.status}).</div>
+      `;
+      return;
     }
+    const data = await res.json();
+    const c = data.customer || {};
+    const d = c.dealerMaster || {};
+    const isDealer = c.isDealer || !!d.id;
+    const stats = c.stats || {};
+    const wallet = c.wallet || {};
+    const bank = c.bank || {};
+    const recent = c.recent || [];
+
+    const claimRows = (recent || []).map(r => `
+      <tr>
+        <td class="mono"><b>${r.id}</b></td>
+        <td>
+          <span class="chip ${r.status === 'APPROVED' ? 'chip-success' : r.status === 'REJECTED' ? 'chip-danger' : 'chip-warning'}">
+            <span class="chip-dot"></span>
+            ${r.status}
+          </span>
+        </td>
+        <td class="mono">LKR ${(r.total_approved_reward_lkr ?? r.total_claimed_reward_lkr ?? 0).toFixed(0)}</td>
+        <td style="font-size:0.75rem;color:var(--text-muted);">${r.created_at_server ? new Date(r.created_at_server).toLocaleDateString() : '—'}</td>
+      </tr>
+    `).join("");
+
+    document.getElementById("drawerTitle").textContent = d.name || c.contactPhone || c.mobile || "Customer Dossier";
+    document.getElementById("drawerSubtitle").textContent = d.customer_code ? `${d.customer_code} · ${c.contactPhone || c.mobile}` : (c.contactPhone || c.mobile);
+
+    // Generate store-specific QR link
+    const storeClaimUrl = `${window.location.origin}/?dealer=${encodeURIComponent(d.id || '')}`;
+    let storeQrSvg = "";
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(storeClaimUrl);
+      qr.make();
+      storeQrSvg = qr.createSvgTag(4, 0);
+    } catch {}
+
+    document.getElementById("drawerBody").innerHTML = `
+      <!-- Financial Snapshot Cards -->
+      <div class="stat-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom:18px;">
+        <div class="stat-card primary" style="padding:14px;">
+          <div class="stat-label" style="font-size:0.7rem;">Wallet Balance</div>
+          <div class="stat-value mono" style="font-size:1.3rem;color:var(--primary);">
+            LKR ${Number(wallet.balance_lkr || 0).toLocaleString(undefined, {minimumFractionDigits:2})}
+          </div>
+          <div class="stat-sub" style="font-size:0.7rem;">Status: <b>${wallet.status || 'ACTIVE'}</b></div>
+        </div>
+        <div class="stat-card success" style="padding:14px;">
+          <div class="stat-label" style="font-size:0.7rem;">Approved Rewards</div>
+          <div class="stat-value mono" style="font-size:1.3rem;color:var(--success);">
+            LKR ${Number(stats.approved_lkr || 0).toLocaleString()}
+          </div>
+          <div class="stat-sub" style="font-size:0.7rem;">${stats.approved || 0} claims approved</div>
+        </div>
+      </div>
+
+      <!-- Retail Master Profile -->
+      <div class="detail-section">
+        <div class="detail-section-title">🏢 Retail Master Information</div>
+        <div class="detail-row"><span class="detail-label">Store / Customer Name</span><span class="detail-val">${d.name || 'Direct Customer'}</span></div>
+        <div class="detail-row"><span class="detail-label">Customer Code</span><span class="detail-val mono">${d.customer_code || '—'}</span></div>
+        <div class="detail-row"><span class="detail-label">Contact Phone</span><span class="detail-val mono">${d.contact_phone || c.contactPhone || '—'}</span></div>
+        <div class="detail-row"><span class="detail-label">City</span><span class="detail-val">${d.city || '—'}</span></div>
+        <div class="detail-row"><span class="detail-label">Address</span><span class="detail-val">${d.address || '—'}</span></div>
+        <div class="detail-row">
+          <span class="detail-label">GPS Geofence</span>
+          <span class="detail-val">
+            ${d.latitude != null ? `
+              <span class="chip chip-success"><span class="chip-dot"></span>${d.latitude.toFixed(4)}, ${d.longitude.toFixed(4)}</span>
+              <a href="https://maps.google.com/?q=${d.latitude},${d.longitude}" target="_blank" style="font-size:0.78rem;color:var(--primary);margin-left:6px;">Map ↗</a>
+            ` : '<span style="color:var(--text-subtle);">No geofence set</span>'}
+          </span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Account Master Status</span>
+          <span class="detail-val">
+            <span class="chip ${d.active === 0 ? 'chip-muted' : 'chip-success'}"><span class="chip-dot"></span>${d.active === 0 ? 'Inactive' : 'Active Partner'}</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Store Counter QR Asset -->
+      ${isDealer ? `
+        <div class="detail-section">
+          <div class="detail-section-title">📱 Store Counter QR Poster</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+            <div style="background:#ffffff;padding:8px;border:1px solid var(--border);border-radius:8px;">
+              ${storeQrSvg}
+            </div>
+            <div style="flex:1;min-width:180px;">
+              <div style="font-size:0.82rem;font-weight:600;margin-bottom:4px;">Dealer Claim Link</div>
+              <div class="mono" style="font-size:0.72rem;word-break:break-all;color:var(--text-muted);background:var(--surface-subtle);padding:6px;border-radius:4px;margin-bottom:8px;">
+                ${storeClaimUrl}
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="downloadStoreQr('${storeClaimUrl}', '${(d.name || 'store').replace(/[^a-zA-Z0-9]/g, '_')}')">
+                📥 Download Counter Poster SVG
+              </button>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Bank Details -->
+      <div class="detail-section">
+        <div class="detail-section-title">🏦 Commercial Bank Settlement</div>
+        ${bank.account_name ? `
+          <div class="detail-row"><span class="detail-label">Account Name</span><span class="detail-val">${bank.account_name}</span></div>
+          <div class="detail-row"><span class="detail-label">Bank Name</span><span class="detail-val">${bank.bank_name}</span></div>
+          <div class="detail-row"><span class="detail-label">Branch</span><span class="detail-val">${bank.branch_name || '—'}</span></div>
+          <div class="detail-row"><span class="detail-label">Account Number</span><span class="detail-val mono">${bank.account_number}</span></div>
+        ` : `
+          <div style="font-size:0.82rem;color:var(--text-muted);padding:4px 0;">No commercial bank details registered yet. Customer can submit them on the tracking portal.</div>
+        `}
+      </div>
+
+      <!-- Recent Submissions -->
+      <div class="detail-section">
+        <div class="detail-section-title">📑 Recent Submissions History (${recent.length})</div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr><th>Submission ID</th><th>Status</th><th>Reward</th><th>Date</th></tr>
+            </thead>
+            <tbody>
+              ${claimRows || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">No claim submissions recorded yet.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    document.getElementById("drawerBody").innerHTML = `<div class="banner err">${err.message}</div>`;
   }
-  canvas.toBlob((blob) => triggerDownload(blob, "reward-qr.png"));
 }
 
-function printQrPdf() {
-  const svgHolder = document.getElementById("qrSvgHolder");
-  if (!svgHolder) return;
-  const win = window.open("", "_blank");
-  win.document.write(`
-    <html><head><title>Print QR</title></head>
-    <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
-      ${svgHolder.innerHTML}
-    </body></html>
-  `);
-  win.document.close();
-  win.focus();
-  win.print();
+function closeCustomerDrawer() {
+  document.getElementById("customerDrawer").classList.remove("active");
 }
 
-function triggerDownload(blob, filename) {
-  const url = URL.createObjectURL(blob);
+function downloadStoreQr(url, storeName) {
+  const qr = qrcode(0, 'M');
+  qr.addData(url);
+  qr.make();
+  const svg = qr.createSvgTag(8, 2);
+  downloadFile(svg, `cantec_qr_${storeName}.svg`, "image/svg+xml");
+}
+
+// Bulk Excel upload helper
+function handleBulkUpload(event, kind) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const workbook = XLSX.read(e.target.result, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      const rows = kind === "dealers"
+        ? raw.map(r => ({
+            customerCode: String(r.customerCode || r.CustomerCode || "").trim(),
+            name: String(r.name || r.Name || "").trim(),
+            contactPhone: String(r.contactPhone || r.ContactPhone || "").trim() || undefined,
+            address: String(r.address || r.Address || "").trim() || undefined,
+            city: String(r.city || r.City || "").trim() || undefined,
+            location: String(r.location || r.Location || r.mapsLink || "").trim() || undefined,
+          }))
+        : raw.map(r => ({
+            itemCode: String(r.itemCode || r.ItemCode || "").trim(),
+            name: String(r.name || r.Name || "").trim(),
+            unitLabel: String(r.unitLabel || r.UnitLabel || "").trim() || undefined,
+            rate: r.rate !== undefined && r.rate !== "" ? parseFloat(r.rate) : undefined,
+          }));
+
+      const endpoint = kind === "dealers" ? "/api/admin/dealers/bulk" : "/api/admin/items/bulk";
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ rows })
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "Upload failed"); return; }
+      alert(`Success: Created ${data.created || 0}, Updated ${data.updated || 0}`);
+      if (kind === "dealers") {
+        loadCustomers();
+        updateHeaderCounts();
+      } else {
+        loadItems();
+      }
+    } catch (err) {
+      alert("Excel parse error: " + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value = "";
+}
+
+function downloadFile(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
   const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
+  a.href = URL.createObjectURL(blob);
+  a.download = fileName;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
-
-if (token) showApp();
 </script>
 </body>
 </html>

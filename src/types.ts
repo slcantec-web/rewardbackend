@@ -1,3 +1,22 @@
+export interface D1PreparedStatement {
+  bind(...values: any[]): D1PreparedStatement;
+  first<T = unknown>(colName?: string): Promise<T | null>;
+  all<T = unknown>(): Promise<{ results: T[]; success?: boolean; meta?: any }>;
+  run(): Promise<{ success?: boolean; meta: { changes: number; last_row_id?: number } }>;
+}
+
+export interface D1Database {
+  prepare(query: string): D1PreparedStatement;
+  batch(statements: D1PreparedStatement[]): Promise<any[]>;
+  exec?(query: string): Promise<any>;
+}
+
+export interface R2Bucket {
+  put(key: string, value: any, options?: any): Promise<any>;
+  get(key: string): Promise<any>;
+  delete(key: string): Promise<void>;
+}
+
 export interface Env {
   DB: D1Database;
   BILL_IMAGES: R2Bucket;

@@ -1,0 +1,7 @@
+{
+  "name": "CanTec Rewards & Fraud Prevention",
+  "description": "Itemized B2B2C purchase reward claim and verification platform with automated fraud prevention telemetry, admin customer/item masters, and finance review dashboards.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

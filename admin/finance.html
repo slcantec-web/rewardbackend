@@ -3,102 +3,529 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Finance Review Dashboard</title>
+<title>CanTec Rewards — Finance Review &amp; Settlement Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --primary: #1a6b3c; --danger: #b91c1c; --bg: #f3f4f6; --card: #fff; --border: #e2e5e4; --muted: #6b7280; }
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; }
-  .layout { display: flex; height: 100vh; }
-  .sidebar { width: 360px; border-right: 1px solid var(--border); background: var(--card); overflow-y: auto; }
-  .main { flex: 1; overflow-y: auto; padding: 20px; }
-  .queue-item { padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
-  .queue-item:hover { background: #f9fafb; }
-  .queue-item.active { background: #eef7f0; border-left: 3px solid var(--primary); }
-  .queue-item .sub-id { font-weight: 600; }
-  .queue-item .meta { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
-  .risk-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
-  .risk-low { background: #dcfce7; color: #166534; }
-  .risk-med { background: #fef3c7; color: #92400e; }
-  .risk-high { background: #fee2e2; color: #991b1b; }
-  .device-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; margin-left: 4px; }
-  .device-shared { background: #fce7f3; color: #9d174d; }
-  .device-repeat { background: #e0e7ff; color: #3730a3; }
-  .device-single { background: #f3f4f6; color: #4b5563; }
-  .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-  .panel h3 { margin: 0 0 10px; font-size: 1rem; }
-  #billImage { width: 100%; border-radius: 8px; border: 1px solid var(--border); }
-  .metric-row { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 5px 0; border-bottom: 1px solid #f0f0f0; }
-  .flag-chip { display: inline-block; background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; margin: 2px 4px 2px 0; }
-  .item-line { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
-  .item-line input { width: 70px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; }
-  .total-line { display: flex; justify-content: space-between; font-weight: 700; font-size: 1.1rem; margin-top: 10px; }
-  .actions { display: flex; gap: 10px; margin-top: 14px; }
-  .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
-  .btn-approve { background: var(--primary); color: #fff; }
-  .btn-reject { background: var(--danger); color: #fff; }
-  .btn-save { background: #374151; color: #fff; }
-  .btn-secondary { background: #e5e7eb; color: #111; border: 1px solid var(--border); }
-  #loginOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
-  #loginBox { background: #fff; padding: 24px; border-radius: 12px; width: 300px; }
-  #loginBox input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; }
-  #loginBox button { width: 100%; padding: 10px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; }
-  select#rejectionCode { width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border); }
-  .app-header {
-    background: var(--primary); color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 14px;
+  :root {
+    --primary: #0f766e;
+    --primary-hover: #0d9488;
+    --primary-subtle: #f0fdfa;
+    --primary-border: #99f6e4;
+    --brand-dark: #091e19;
+    
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    
+    --text: #0f172a;
+    --text-muted: #64748b;
+    --text-subtle: #94a3b8;
+    
+    --success: #15803d;
+    --success-bg: #f0fdf4;
+    --warning: #b45309;
+    --warning-bg: #fffbeb;
+    --danger: #b91c1c;
+    --danger-bg: #fef2f2;
+    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    --radius: 10px;
   }
-  .app-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
-  .app-header nav { display: flex; gap: 14px; margin-left: 20px; }
-  .app-header nav a { color: #fff; opacity: 0.85; text-decoration: none; font-size: 0.9rem; }
-  .app-header nav a.active { opacity: 1; font-weight: 700; border-bottom: 2px solid #fff; }
-  .app-header .spacer { flex: 1; }
-  .app-header .who { font-size: 0.85rem; opacity: 0.9; margin-right: 10px; }
-  .app-header button.logout { background: rgba(255,255,255,0.15); color: #fff; border: none; padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
-  .top-customers-panel { padding: 14px 16px; border-bottom: 1px solid var(--border); }
-  .top-customers-panel h4 { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; }
-  .top-customer-row { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 4px 0; }
-  .payout-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
-  .payout-card .bank-info { background: #f9fafb; border-radius: 8px; padding: 10px; margin: 10px 0; font-size: 0.9rem; }
-  .payout-card input { padding: 9px; border: 1px solid var(--border); border-radius: 8px; margin-right: 8px; margin-bottom: 8px; width: 220px; }
-  .muted { color: var(--muted); font-size: 0.85rem; }
-  .cust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 0.9rem; }
-  .cust-grid .label { color: var(--muted); font-size: 0.8rem; }
-  .device-card { background: #f9fafb; border-radius: 8px; padding: 10px; margin-top: 8px; font-size: 0.85rem; }
-  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Header */
+  .enterprise-nav {
+    background: var(--brand-dark);
+    color: #ffffff;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+    z-index: 40;
+  }
+  .nav-inner {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0 20px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: #ffffff;
+  }
+  .brand-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1rem;
+    color: #ffffff;
+  }
+  .brand-name {
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge-env {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    background: rgba(20, 184, 166, 0.18);
+    color: #2dd4bf;
+    border: 1px solid rgba(45, 212, 191, 0.3);
+    border-radius: 4px;
+  }
+  .nav-spacer { flex: 1; }
+  
+  .portal-switch {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 3px;
+  }
+  .portal-link {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    transition: all 0.15s;
+    cursor: pointer;
+  }
+  .portal-link:hover { color: #ffffff; }
+  .portal-link.active {
+    background: #0f766e;
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  .user-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 12px;
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .user-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #e2e8f0;
+  }
+  .user-info { display: flex; flex-direction: column; line-height: 1.1; }
+  .user-name { font-size: 0.8rem; font-weight: 600; color: #f1f5f9; }
+  .user-role { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; }
+  .btn-logout {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #cbd5e1;
+    font-size: 0.76rem;
+    padding: 4px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .btn-logout:hover { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+
+  /* Layout */
+  .workspace {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    background: var(--bg);
+  }
+
+  /* Left Sidebar / Queue List */
+  .sidebar {
+    width: 360px;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sidebar-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: #fafbfb;
+  }
+  .queue-filter-bar {
+    display: flex;
+    gap: 4px;
+    margin-top: 10px;
+    background: #f1f5f9;
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .queue-tab-btn {
+    flex: 1;
+    text-align: center;
+    padding: 5px 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .queue-tab-btn.active {
+    background: #ffffff;
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .queue-scroll {
+    flex: 1;
+    overflow-y: auto;
+  }
+  .queue-item {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .queue-item:hover { background: #f8fafc; }
+  .queue-item.active {
+    background: #f0fdfa;
+    border-left: 3px solid var(--primary);
+  }
+  .queue-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .queue-item-id { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.88rem; }
+  .queue-item-amt { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--primary); }
+  .queue-item-meta { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+  
+  /* Main Review / Content View */
+  .main-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+  }
+  
+  /* Cards & Panels */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 20px;
+  }
+  .panel-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Review Grid */
+  .review-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 1024px) {
+    .review-grid { grid-template-columns: 1fr; }
+  }
+
+  .bill-viewer {
+    background: #0f172a;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 420px;
+    max-height: 600px;
+    position: relative;
+  }
+  .bill-viewer img {
+    max-width: 100%;
+    max-height: 580px;
+    object-fit: contain;
+    transition: transform 0.2s;
+  }
+
+  /* Verification Line Items */
+  .line-item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: #fafbfb;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    gap: 12px;
+  }
+  .line-name { font-weight: 600; font-size: 0.9rem; flex: 1; }
+  .line-claimed { font-size: 0.8rem; color: var(--text-muted); }
+  .line-qty-input {
+    width: 80px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    text-align: center;
+    font-weight: 700;
+  }
+
+  /* Action Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 16px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--primary); color: #ffffff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-success { background: var(--success); color: #ffffff; }
+  .btn-success:hover { background: #166534; }
+  .btn-danger { background: var(--danger); color: #ffffff; }
+  .btn-danger:hover { background: #991b1b; }
+  .btn-secondary { background: #ffffff; color: #334155; border-color: var(--border); }
+  .btn-secondary:hover { background: #f8fafc; }
+  .btn-sm { padding: 5px 10px; font-size: 0.78rem; border-radius: 6px; }
+
+  /* Monospace metrics */
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Badges & Chips */
+  .status-chip {
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .chip-success { background: var(--success-bg); color: var(--success); }
+  .chip-warning { background: var(--warning-bg); color: var(--warning); }
+  .chip-danger { background: var(--danger-bg); color: var(--danger); }
+  .chip-muted { background: #f1f5f9; color: #475569; }
+
+  /* Tables */
+  .table-responsive { width: 100%; overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+    text-align: left;
+  }
+  th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 600;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text);
+    vertical-align: middle;
+  }
+  tr:hover td { background: #f8fafc; }
+
+  /* Detail Group */
+  .detail-group {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+  }
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    padding: 5px 0;
+    border-bottom: 1px dashed #e2e8f0;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-label { color: var(--text-muted); }
+  .detail-val { font-weight: 600; text-align: right; }
+
+  /* Payout card */
+  .payout-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Login Overlay */
+  #loginOverlay {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at top, #0f2c25 0%, #061510 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .login-card {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 32px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25);
+  }
 </style>
 </head>
 <body>
 
+<!-- Login Overlay -->
 <div id="loginOverlay">
-  <div id="loginBox">
-    <h3>Finance Login</h3>
-    <input type="text" id="username" placeholder="Username" />
-    <input type="password" id="password" placeholder="Password" />
-    <button id="loginBtn">Sign In</button>
-    <div id="loginError" style="color:red;font-size:0.85rem;margin-top:6px;"></div>
+  <div class="login-card">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+      <div class="brand-icon" style="width:40px;height:40px;font-size:1.2rem;">C</div>
+      <div>
+        <h2 style="font-size:1.15rem;font-weight:800;letter-spacing:-0.02em;">CanTec Rewards</h2>
+        <p style="font-size:0.8rem;color:var(--text-muted);">Finance Review &amp; Settlement</p>
+      </div>
+    </div>
+    
+    <div style="margin-bottom:14px;">
+      <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Username</label>
+      <input type="text" id="username" placeholder="finance or admin" value="finance" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;" />
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Password</label>
+      <input type="password" id="password" placeholder="••••••••" value="finance123" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;" />
+    </div>
+    
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;padding:11px;font-size:0.9rem;">Sign In to Finance</button>
+    <div id="loginError" style="color:var(--danger);font-size:0.85rem;margin-top:10px;display:none;"></div>
+
+    <div style="margin-top:20px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:0.78rem;color:#64748b;">
+      <div style="font-weight:600;color:#0f172a;margin-bottom:4px;">Demo Accounts:</div>
+      <div>Staff: <b>finance</b> / <b>finance123</b></div>
+      <div>Lead / Admin: <b>lead</b> / <b>lead123</b> or <b>admin</b> / <b>admin123</b></div>
+    </div>
   </div>
 </div>
 
-<div class="layout" style="display:none;flex-direction:column;" id="mainLayout">
-  <div class="app-header">
-    <h2>💰 Finance Dashboard <span style="font-size:0.7rem;opacity:0.75;font-weight:500;">v2026-09-24d</span></h2>
-    <nav>
-      <a href="#" id="navQueue" class="active">Review Queue</a>
-      <a href="#" id="navCustomers">Customers</a>
-      <a href="#" id="navPayouts" style="display:none;">Payouts</a>
-      <a href="/index.html">Admin Panel →</a>
-    </nav>
-    <div class="spacer"></div>
-    <span class="who" id="whoLabel"></span>
-    <button class="logout" id="logoutBtn">Log out</button>
-  </div>
-  <div style="display:flex;flex:1;min-height:0;">
-    <div class="sidebar" id="queueSidebar">
-      <div class="top-customers-panel" id="topCustomersPanel"></div>
-      <div id="queueList"></div>
+<!-- Main Finance Interface -->
+<div id="app" style="display:none;height:100vh;flex-direction:column;">
+  <!-- Enterprise Header -->
+  <header class="enterprise-nav">
+    <div class="nav-inner">
+      <a href="/admin/finance.html" class="brand">
+        <div class="brand-icon">C</div>
+        <div class="brand-name">
+          CanTec Rewards
+          <span class="badge-env">Finance</span>
+        </div>
+      </a>
+
+      <div class="portal-switch">
+        <a href="/admin/index.html" class="portal-link">← Admin Panel</a>
+        <a href="#" id="navQueue" class="portal-link active">Review Queue</a>
+        <a href="#" id="navCustomers" class="portal-link">Customer Summaries</a>
+        <a href="#" id="navPayouts" class="portal-link">Payout Ledger</a>
+      </div>
+
+      <div class="nav-spacer"></div>
+
+      <div class="user-profile">
+        <div class="user-avatar" id="avatarLetter">F</div>
+        <div class="user-info">
+          <span class="user-name" id="whoLabel">Finance Officer</span>
+          <span class="user-role" id="roleLabel">Review Agent</span>
+        </div>
+        <button class="btn-logout" id="logoutBtn">Sign out</button>
+      </div>
     </div>
-    <div class="main" id="reviewPanel">
-      <div class="panel">Select a submission from the queue to begin review.</div>
+  </header>
+
+  <!-- Workspace Container -->
+  <div class="workspace">
+    <!-- Queue Sidebar -->
+    <div class="sidebar" id="queueSidebar">
+      <div class="sidebar-header">
+        <div style="font-size:0.9rem;font-weight:700;">Audit &amp; Review Queue</div>
+        <div class="queue-filter-bar">
+          <button class="queue-tab-btn active" data-filter="PENDING" onclick="filterQueue('PENDING')">Pending</button>
+          <button class="queue-tab-btn" data-filter="APPROVED" onclick="filterQueue('APPROVED')">Approved</button>
+          <button class="queue-tab-btn" data-filter="REJECTED" onclick="filterQueue('REJECTED')">Rejected</button>
+          <button class="queue-tab-btn" data-filter="ALL" onclick="filterQueue('ALL')">All</button>
+        </div>
+      </div>
+      <div class="queue-scroll" id="queueList">
+        <div style="padding:24px;text-align:center;color:var(--text-muted);">Loading claims queue…</div>
+      </div>
+    </div>
+
+    <!-- Main Review / View Panel -->
+    <div class="main-content" id="reviewPanel">
+      <div class="panel" style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+        <h3>No submission selected</h3>
+        <p style="margin-top:6px;font-size:0.85rem;">Select an invoice proof from the left queue to verify quantities and evaluate telemetry.</p>
+      </div>
     </div>
   </div>
 </div>
@@ -106,30 +533,42 @@
 <script src="/config.js"></script>
 <script>
 const API_BASE = window.API_BASE || "";
-let token = localStorage.getItem("financeToken") || null;
-let role = localStorage.getItem("financeRole") || null;
+let token = localStorage.getItem("financeToken") || localStorage.getItem("adminToken") || null;
+let role = localStorage.getItem("financeRole") || (localStorage.getItem("adminToken") ? "admin" : null);
+let username = localStorage.getItem("financeUsername") || localStorage.getItem("adminUsername") || "staff";
 let currentId = null;
-let lastPayouts = [];
+let queueFilter = "PENDING";
+let cachedSubmissions = [];
 
 document.getElementById("loginBtn").addEventListener("click", async () => {
-  const username = document.getElementById("username").value;
-  const password = document.getElementById("password").value;
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password })
-  });
-  const data = await res.json();
-  if (!res.ok) { document.getElementById("loginError").textContent = data.error; return; }
-  if (data.role !== "finance_staff" && data.role !== "finance_lead") {
-    document.getElementById("loginError").textContent = "This account does not have Finance access.";
-    return;
+  const u = document.getElementById("username").value.trim();
+  const p = document.getElementById("password").value;
+  const msg = document.getElementById("loginError");
+  msg.style.display = "none";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: u, password: p })
+    });
+    const data = await res.json();
+    if (!res.ok) { msg.style.display = "block"; msg.textContent = data.error || "Login failed."; return; }
+
+    token = data.token;
+    role = data.role;
+    username = u;
+    localStorage.setItem("financeToken", token);
+    localStorage.setItem("financeRole", role);
+    localStorage.setItem("financeUsername", username);
+    if (role === "admin") {
+      localStorage.setItem("adminToken", token);
+      localStorage.setItem("adminUsername", username);
+    }
+    showApp();
+  } catch (err) {
+    msg.style.display = "block";
+    msg.textContent = "Server error.";
   }
-  token = data.token;
-  role = data.role;
-  localStorage.setItem("financeToken", token);
-  localStorage.setItem("financeRole", role);
-  localStorage.setItem("financeUsername", username);
-  showApp();
 });
 
 document.getElementById("logoutBtn").addEventListener("click", () => {
@@ -139,51 +578,36 @@ document.getElementById("logoutBtn").addEventListener("click", () => {
   location.reload();
 });
 
+function authHeaders() {
+  return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
 function showApp() {
   document.getElementById("loginOverlay").style.display = "none";
-  document.getElementById("mainLayout").style.display = "flex";
-  document.getElementById("whoLabel").textContent = `${localStorage.getItem("financeUsername") || ""} (${role.replace("_", " ")})`;
+  document.getElementById("app").style.display = "flex";
+  document.getElementById("whoLabel").textContent = username;
+  document.getElementById("roleLabel").textContent = role ? role.replace("_", " ") : "finance";
+  document.getElementById("avatarLetter").textContent = username.charAt(0).toUpperCase();
 
-  if (role === "finance_lead") {
-    document.getElementById("navPayouts").style.display = "inline";
-  }
+  // Navigation handlers
   document.getElementById("navQueue").addEventListener("click", (e) => { e.preventDefault(); showQueueView(); });
   document.getElementById("navCustomers").addEventListener("click", (e) => { e.preventDefault(); showCustomersView(); });
   document.getElementById("navPayouts").addEventListener("click", (e) => { e.preventDefault(); showPayoutsView(); });
 
-  loadTopCustomers();
   loadQueue();
-  checkApiVersion();
 }
-
-async function checkApiVersion() {
-  try {
-    const res = await fetch(`${API_BASE}/api/version`);
-    const data = await res.json();
-    const el = document.getElementById("whoLabel");
-    if (el && data.apiVersion) {
-      el.textContent = (el.textContent || "") + " · API " + data.apiVersion;
-    }
-    if (!String(data.apiVersion || "").includes("2026-09-24")) {
-      console.warn("Worker API is OLD — redeploy Worker with src/index.ts + src/extras.ts", data);
-    }
-  } catch (e) {
-    console.warn("Could not reach /api/version — Worker may be old or URL wrong", e);
-  }
-}
-
 
 function setActiveNav(id) {
-  document.querySelectorAll(".app-header nav a").forEach(a => a.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
+  document.querySelectorAll(".portal-switch a").forEach(a => a.classList.remove("active"));
+  const el = document.getElementById(id);
+  if (el) el.classList.add("active");
 }
 
 function showQueueView() {
   setActiveNav("navQueue");
-  document.getElementById("queueSidebar").style.display = "block";
+  document.getElementById("queueSidebar").style.display = "flex";
   loadQueue();
 }
-
 
 function showCustomersView() {
   setActiveNav("navCustomers");
@@ -193,544 +617,480 @@ function showCustomersView() {
 
 function showPayoutsView() {
   setActiveNav("navPayouts");
-  document.getElementById("queueSidebar").style.display = "block";
-  loadPayouts();
+  document.getElementById("queueSidebar").style.display = "none";
+  loadPayoutsView();
 }
 
-let lastCustomerSummaries = [];
+// -------------------------------------------------------------
+// REVIEW QUEUE
+// -------------------------------------------------------------
+async function loadQueue() {
+  try {
+    const res = await fetch(`${API_BASE}/api/finance/submissions?status=${queueFilter}`, { headers: authHeaders() });
+    if (res.status === 401) { token = null; location.reload(); return; }
+    const data = await res.json();
+    cachedSubmissions = data.submissions || [];
+    renderQueueList(cachedSubmissions);
+  } catch (e) {
+    document.getElementById("queueList").innerHTML = `<div style="padding:20px;color:red;">Error loading queue.</div>`;
+  }
+}
 
-async function loadCustomerSummaries() {
-  const sort = document.getElementById("custSort")?.value || "approved";
-  const q = document.getElementById("custSearch")?.value?.trim() || "";
-  const params = new URLSearchParams({ sort, limit: "200" });
-  if (q) params.set("q", q);
+function filterQueue(status) {
+  queueFilter = status;
+  document.querySelectorAll(".queue-tab-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.filter === status);
+  });
+  loadQueue();
+}
 
-  document.getElementById("reviewPanel").innerHTML = `<div class="panel">Loading customer summaries…</div>`;
-
-  const res = await fetch(`${API_BASE}/api/finance/customer-summaries?${params}`, { headers: authHeaders() });
-  if (res.status === 401) { localStorage.removeItem("financeToken"); location.reload(); return; }
-  const data = await res.json();
-  if (!res.ok) {
-    document.getElementById("reviewPanel").innerHTML = `<div class="panel"><b>Error:</b> ${data.error || res.status}</div>`;
+function renderQueueList(list) {
+  const container = document.getElementById("queueList");
+  if (!list.length) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem;">No submissions found for status "${queueFilter}".</div>`;
     return;
   }
 
-  lastCustomerSummaries = data.customers || [];
-  const t = data.totals || {};
-  const threshold = data.threshold || 1000;
-
-  const rows = lastCustomerSummaries.map(c => {
-    const riskCls = c.max_risk >= 60 ? "risk-high" : c.max_risk >= 25 ? "risk-med" : "risk-low";
-    const flags = [];
-    if (c.geo_mismatch_count) flags.push(`Geo×${c.geo_mismatch_count}`);
-    if (c.duplicate_count) flags.push(`Dup×${c.duplicate_count}`);
-    if (c.velocity_count) flags.push(`Vel×${c.velocity_count}`);
-    if (c.high_risk_count) flags.push(`HiRisk×${c.high_risk_count}`);
-    if (c.device_count > 2) flags.push(`${c.device_count} devices`);
+  container.innerHTML = list.map(s => {
+    const risk = Number(s.risk_score || 0);
+    const chip = risk >= 60 ? 'chip-danger' : risk >= 25 ? 'chip-warning' : 'chip-success';
     return `
-      <tr style="${c.suspect ? 'background:#fff1f2;' : c.payout_eligible ? 'background:#f0fdf4;' : ''}">
-        <td>
-          <b style="cursor:pointer;color:var(--primary);" onclick="openCustomerDetail('${c.mobile_number}')">${c.mobile_number}</b>
-          ${c.suspect ? '<span class="device-badge device-shared">SUSPECT</span>' : ''}
-          ${c.payout_eligible ? '<span class="device-badge" style="background:#dcfce7;color:#166534;">PAYOUT ≥'+threshold+'</span>' : ''}
-        </td>
-        <td>${c.total_submissions}<div class="muted" style="font-size:0.7rem;">A${c.approved_count}/R${c.rejected_count}/P${c.pending_count}</div></td>
-        <td><b>${Number(c.approved_lkr).toFixed(0)}</b></td>
-        <td>${Number(c.pending_lkr).toFixed(0)}</td>
-        <td>${Number(c.wallet_balance).toFixed(0)}<div class="muted" style="font-size:0.7rem;">${c.wallet_status}</div></td>
-        <td>${Number(c.net_payable).toFixed(0)}
-          <div class="muted" style="font-size:0.7rem;">paid ${Number(c.paid_lkr).toFixed(0)} · pend-pay ${Number(c.pending_payout_lkr).toFixed(0)}</div>
-        </td>
-        <td><span class="risk-badge ${riskCls}">${c.max_risk}</span>
-          <div class="muted" style="font-size:0.7rem;">${flags.join(" · ") || "—"}</div>
-        </td>
-        <td class="muted" style="font-size:0.75rem;">${c.dealer_count} dealers · ${c.device_count} devices
-          <div>${c.has_bank ? "bank ✓" : "no bank"}</div>
-        </td>
-      </tr>`;
+      <div class="queue-item ${s.id === currentId ? 'active' : ''}" data-id="${s.id}" onclick="selectSubmission('${s.id}')">
+        <div class="queue-item-header">
+          <span class="queue-item-id">${s.id}</span>
+          <span class="queue-item-amt">LKR ${(s.total_claimed_reward_lkr || 0).toFixed(0)}</span>
+        </div>
+        <div class="queue-item-meta">${s.dealer_name || "Direct Customer"} · ${s.mobile_number}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:0.75rem;color:var(--text-subtle);">${new Date(s.created_at_server).toLocaleDateString()}</span>
+          <span class="status-chip ${chip}">Risk ${risk}</span>
+        </div>
+      </div>
+    `;
   }).join("");
-
-  document.getElementById("reviewPanel").innerHTML = `
-    <div class="panel" style="border:2px solid #1a6b3c;">
-      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
-        <div>
-          <h3 style="margin:0;">Customer summary (by mobile)</h3>
-          <div class="muted" style="margin-top:4px;">API ${data.apiVersion || "?"} · Threshold LKR ${threshold}</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <input type="text" id="custSearch" placeholder="Search mobile…" value="${q.replace(/"/g,'&quot;')}" style="padding:8px;border:1px solid var(--border);border-radius:8px;width:140px;" />
-          <select id="custSort" style="padding:8px;border-radius:8px;border:1px solid var(--border);">
-            <option value="approved" ${sort==='approved'?'selected':''}>Sort: Approved LKR</option>
-            <option value="pending" ${sort==='pending'?'selected':''}>Sort: Pending LKR</option>
-            <option value="risk" ${sort==='risk'?'selected':''}>Sort: Risk</option>
-            <option value="submissions" ${sort==='submissions'?'selected':''}>Sort: Submissions</option>
-            <option value="recent" ${sort==='recent'?'selected':''}>Sort: Recent</option>
-          </select>
-          <button class="btn btn-secondary" style="width:auto;padding:8px 14px;" onclick="loadCustomerSummaries()">Search</button>
-          <button class="btn btn-secondary" style="width:auto;padding:8px 14px;" onclick="exportCustomersCsv()">CSV</button>
-        </div>
-      </div>
-      <div class="cust-grid" style="margin-top:14px;">
-        <div><div class="label">Customers</div><div><b>${t.customers ?? 0}</b></div></div>
-        <div><div class="label">Approved LKR</div><div><b>${Number(t.approved_lkr||0).toFixed(0)}</b></div></div>
-        <div><div class="label">Pending claim LKR</div><div><b>${Number(t.pending_lkr||0).toFixed(0)}</b></div></div>
-        <div><div class="label">Payout-eligible (≥${threshold})</div><div><b>${t.eligible ?? 0}</b></div></div>
-        <div><div class="label">Suspects</div><div><b style="color:var(--danger);">${t.suspects ?? 0}</b></div></div>
-        <div><div class="label">With pending payout row</div><div><b>${t.with_pending_payout ?? 0}</b></div></div>
-      </div>
-    </div>
-    <div class="panel" style="overflow-x:auto;">
-      <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
-        <thead>
-          <tr style="text-align:left;border-bottom:2px solid var(--border);">
-            <th style="padding:8px 6px;">Mobile / Customer ID</th>
-            <th>Subs</th>
-            <th>Approved LKR</th>
-            <th>Pending LKR</th>
-            <th>Wallet</th>
-            <th>Net payable</th>
-            <th>Risk / flags</th>
-            <th>Dealers · devices</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows || '<tr><td colspan="8" class="muted" style="padding:16px;">No submissions found.</td></tr>'}
-        </tbody>
-      </table>
-      <p class="muted" style="margin-top:10px;">Green row = net payable ≥ threshold (should appear in Payouts after Rebuild). Pink row = suspect (high risk / flags / many devices). Click mobile to open profile.</p>
-    </div>
-  `;
-  document.getElementById("custSearch")?.addEventListener("keydown", (e) => { if (e.key === "Enter") loadCustomerSummaries(); });
 }
 
-async function openCustomerDetail(mobile) {
-  const res = await fetch(`${API_BASE}/api/finance/customers/${encodeURIComponent(mobile)}`, { headers: authHeaders() });
-  const data = await res.json();
-  if (!res.ok) { alert(data.error || "Not found"); return; }
-  const c = data.customer || {};
-  const stats = c.stats || {};
-  const wallet = c.wallet || {};
-  const bank = c.bank;
-  const recent = (c.recent || []).map(r =>
-    `<div class="metric-row"><span>${r.id}</span><span>${r.status} · claim ${Number(r.total_claimed_reward_lkr||0).toFixed(0)} · appr ${Number(r.total_approved_reward_lkr||0).toFixed(0)} · risk ${r.risk_score}</span></div>`
-  ).join("") || "—";
-  const devices = (c.devices || []).map(d =>
-    `<div class="metric-row"><span>${d.label || (d.hash||"").slice(0,12)}</span><span>${d.claims} claims</span></div>`
-  ).join("") || "—";
-  const dealers = (c.dealers || []).map(d =>
-    `<div class="metric-row"><span>${d.name}${d.city ? " · "+d.city : ""}</span><span>${d.claims} claims</span></div>`
-  ).join("") || "—";
-
-  document.getElementById("reviewPanel").innerHTML = `
-    <div class="panel">
-      <button class="btn btn-secondary" style="width:auto;padding:8px 12px;margin-bottom:12px;" onclick="loadCustomerSummaries()">← Back to customers</button>
-      <h3>Customer ${mobile}</h3>
-      <div class="cust-grid">
-        <div><div class="label">Total claims</div><div><b>${stats.total ?? 0}</b></div></div>
-        <div><div class="label">Approved / Rejected / Pending</div><div>${stats.approved ?? 0} / ${stats.rejected ?? 0} / ${stats.pending ?? 0}</div></div>
-        <div><div class="label">Approved LKR</div><div><b>${Number(stats.approved_lkr||0).toFixed(2)}</b></div></div>
-        <div><div class="label">Pending claim LKR</div><div>${Number(stats.pending_lkr||0).toFixed(2)}</div></div>
-        <div><div class="label">Wallet</div><div><b>${Number(wallet.balance_lkr||0).toFixed(2)}</b> (${wallet.status||"NONE"})</div></div>
-        <div><div class="label">Paid out</div><div>${c.paidOut ? "LKR "+Number(c.paidOut.total||0).toFixed(2)+" ("+c.paidOut.n+" txns)" : "—"}</div></div>
-        <div><div class="label">Max risk</div><div>${stats.max_risk ?? 0}</div></div>
-        <div><div class="label">First → last</div><div class="muted">${stats.first_claim ? new Date(stats.first_claim).toLocaleDateString() : "—"} → ${stats.last_claim ? new Date(stats.last_claim).toLocaleDateString() : "—"}</div></div>
-      </div>
-      ${bank ? `<div style="margin-top:10px;"><b>Bank:</b> ${bank.account_name} · ${bank.bank_name}${bank.branch_name?" ("+bank.branch_name+")":""} · ${bank.account_number}</div>` : '<div class="muted" style="margin-top:10px;">No bank details on file.</div>'}
-    </div>
-    <div class="review-grid">
-      <div class="panel"><h3>Recent submissions</h3>${recent}</div>
-      <div>
-        <div class="panel"><h3>Devices</h3>${devices}</div>
-        <div class="panel"><h3>Dealers</h3>${dealers}</div>
-      </div>
-    </div>
-  `;
-}
-
-function exportCustomersCsv() {
-  const header = ["mobile_number","total_submissions","approved_count","rejected_count","pending_count","approved_lkr","pending_lkr","wallet_balance","wallet_status","net_payable","paid_lkr","pending_payout_lkr","max_risk","flagged_count","geo_mismatch_count","duplicate_count","velocity_count","device_count","dealer_count","has_bank","payout_eligible","suspect"];
-  const rows = [header, ...lastCustomerSummaries.map(c => header.map(k => c[k] ?? ""))];
-  downloadCsv(`customers-${new Date().toISOString().slice(0,10)}.csv`, rows);
-}
-
-
-
-function authHeaders() {
-  return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
-}
-
-function deviceClsLabel(subs, mobiles) {
-  if (mobiles >= 2) return { cls: "device-shared", text: `SHARED · ${subs} claims · ${mobiles} mobiles` };
-  if (subs >= 2) return { cls: "device-repeat", text: `REPEAT · ${subs} claims` };
-  return { cls: "device-single", text: "Single use" };
-}
-
-async function loadTopCustomers() {
-  const res = await fetch(`${API_BASE}/api/top-customers?limit=5`, { headers: authHeaders() });
-  if (!res.ok) return;
-  const data = await res.json();
-  const panel = document.getElementById("topCustomersPanel");
-  panel.innerHTML = `
-    <h4>Top Submitted Customers</h4>
-    ${(data.customers || []).map(cust => `
-      <div class="top-customer-row">
-        <span>${cust.dealer_name || cust.mobile_number}</span>
-        <span>${cust.submission_count} claims</span>
-      </div>
-    `).join("") || '<div class="muted">No submissions yet.</div>'}
-  `;
-}
-
-async function loadQueue() {
-  const res = await fetch(`${API_BASE}/api/finance/queue?status=PENDING`, { headers: authHeaders() });
-  if (res.status === 401) { localStorage.removeItem("financeToken"); location.reload(); return; }
-  const data = await res.json();
-  const list = document.getElementById("queueList");
-  list.innerHTML = (data.submissions || []).map(s => {
-    const riskClass = s.risk_score >= 60 ? "risk-high" : s.risk_score >= 25 ? "risk-med" : "risk-low";
-    const d = deviceClsLabel(s.device_submissions || 1, s.device_mobiles || 1);
-    return `
-      <div class="queue-item" data-id="${s.id}">
-        <div class="sub-id">${s.id}
-          <span class="device-badge ${d.cls}" title="Device usage">${d.text}</span>
-        </div>
-        <div class="meta">${s.dealer_name || "Unknown dealer"} · ${s.mobile_number}</div>
-        <div class="meta">${new Date(s.created_at_server).toLocaleString()}</div>
-        <span class="risk-badge ${riskClass}">Risk ${s.risk_score}</span>
-      </div>`;
-  }).join("") || `<div style="padding:16px;color:var(--muted);">Queue is empty.</div>`;
-
-  list.querySelectorAll(".queue-item").forEach(el => {
-    el.addEventListener("click", () => {
-      list.querySelectorAll(".queue-item").forEach(x => x.classList.remove("active"));
-      el.classList.add("active");
-      loadSubmission(el.dataset.id);
-    });
-  });
-}
-
-async function loadSubmission(id) {
+async function selectSubmission(id) {
   currentId = id;
-  const res = await fetch(`${API_BASE}/api/finance/submissions/${id}`, { headers: authHeaders() });
-  const data = await res.json();
-  renderReview(data);
-  loadBillImage(id);
+  document.querySelectorAll(".queue-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.id === id);
+  });
+
+  document.getElementById("reviewPanel").innerHTML = `
+    <div style="padding:60px 0;text-align:center;color:var(--text-muted);">
+      Loading submission ${id} details and proof…
+    </div>
+  `;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/finance/submissions/${id}`, { headers: authHeaders() });
+    const data = await res.json();
+    renderReview(data);
+    loadBillImage(id);
+  } catch (err) {
+    document.getElementById("reviewPanel").innerHTML = `<div class="panel" style="color:red;">Error loading submission.</div>`;
+  }
 }
 
 async function loadBillImage(id) {
-  const res = await fetch(`${API_BASE}/api/finance/submissions/${id}/image`, { headers: authHeaders() });
-  if (!res.ok) return;
-  const blob = await res.blob();
-  const img = document.getElementById("billImage");
-  if (img) img.src = URL.createObjectURL(blob);
+  try {
+    const res = await fetch(`${API_BASE}/api/finance/submissions/${id}/image`, { headers: authHeaders() });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const img = document.getElementById("billImage");
+    if (img) img.src = URL.createObjectURL(blob);
+  } catch {}
 }
 
 function renderReview(data) {
-  const s = data.submission;
-  const flags = (s.fraud_flags || "").split(",").filter(Boolean);
-  const riskClass = s.risk_score >= 60 ? "risk-high" : s.risk_score >= 25 ? "risk-med" : "risk-low";
-  const device = data.device || {};
-  const act = device.activity || {};
-  const sum = device.summary || {};
-  const dBadge = deviceClsLabel(act.total || 1, act.mobiles || 1);
+  const s = data.submission || {};
+  const items = data.items || [];
   const cust = data.customer || {};
   const stats = cust.stats || {};
   const wallet = cust.wallet || {};
   const bank = cust.bank;
+  const isPending = s.status === "PENDING" || s.status === "IN_REVIEW";
 
-  const itemRows = (data.items || []).map(i => `
-    <div class="item-line">
-      <span>${i.name}</span>
-      <span style="color:var(--muted);font-size:0.85rem;">Claimed: ${i.claimed_qty}</span>
-      <input type="number" min="0" value="${i.verified_qty ?? i.claimed_qty}" data-item-id="${i.id}" data-rate="${i.rate_lkr_snapshot}" class="verified-qty-input" />
+  const itemRows = items.map(i => `
+    <div class="line-item-row">
+      <div class="line-name">
+        ${i.name}
+        <div class="line-claimed">Claimed: <b>${i.claimed_qty} units</b> · Rate: LKR ${i.rate_lkr_snapshot}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <label style="font-size:0.75rem;font-weight:600;">Verified Qty:</label>
+        <input type="number" min="0" value="${i.verified_qty ?? i.claimed_qty}" data-item-id="${i.id}" data-rate="${i.rate_lkr_snapshot}" class="line-qty-input verified-qty-input" onchange="recalcTotalReward()" ${!isPending ? 'disabled' : ''} />
+      </div>
     </div>
   `).join("");
 
-  const recentHtml = (cust.recent || []).slice(0, 5).map(r =>
-    `<div class="metric-row"><span>${r.id}</span><span>${r.status} · LKR ${(r.total_approved_reward_lkr || r.total_claimed_reward_lkr || 0).toFixed(0)}</span></div>`
-  ).join("") || '<div class="muted">No history</div>';
-
-  const devicesHtml = (cust.devices || []).map(d =>
-    `<div class="metric-row"><span>${d.label || d.hash?.slice(0, 10)}</span><span>${d.claims} claims</span></div>`
-  ).join("") || '<div class="muted">—</div>';
-
   document.getElementById("reviewPanel").innerHTML = `
-    <div class="review-grid">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
       <div>
-        <div class="panel">
-          <h3>Uploaded Invoice — ${s.id}</h3>
-          <img id="billImage" alt="Bill" />
-        </div>
-        <div class="panel">
-          <h3>Customer Profile · ${s.mobile_number}</h3>
-          <div class="cust-grid">
-            <div><div class="label">Total claims</div><div><b>${stats.total ?? 0}</b></div></div>
-            <div><div class="label">Approved / Rejected / Pending</div><div>${stats.approved ?? 0} / ${stats.rejected ?? 0} / ${stats.pending ?? 0}</div></div>
-            <div><div class="label">Approved LKR</div><div><b>${Number(stats.approved_lkr || 0).toFixed(2)}</b></div></div>
-            <div><div class="label">Wallet balance</div><div><b>${Number(wallet.balance_lkr || 0).toFixed(2)}</b> <span class="muted">(${wallet.status || "ACTIVE"})</span></div></div>
-            <div><div class="label">Paid out</div><div>${cust.paidOut ? `LKR ${Number(cust.paidOut.total || 0).toFixed(2)} (${cust.paidOut.n || 0} txns)` : "—"}</div></div>
-            <div><div class="label">First / last claim</div><div class="muted">${stats.first_claim ? new Date(stats.first_claim).toLocaleDateString() : "—"} → ${stats.last_claim ? new Date(stats.last_claim).toLocaleDateString() : "—"}</div></div>
-          </div>
-          ${bank ? `<div style="margin-top:10px;font-size:0.9rem;"><b>Bank:</b> ${bank.account_name} · ${bank.bank_name}${bank.branch_name ? " (" + bank.branch_name + ")" : ""} · ${bank.account_number}</div>` : '<div class="muted" style="margin-top:8px;">No bank details on file yet.</div>'}
-          <div style="margin-top:12px;"><div class="label" style="margin-bottom:4px;">Recent claims</div>${recentHtml}</div>
-          <div style="margin-top:10px;"><div class="label" style="margin-bottom:4px;">Devices used by this mobile</div>${devicesHtml}</div>
-        </div>
+        <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-0.02em;">Submission Review — ${s.id}</h2>
+        <p style="font-size:0.85rem;color:var(--text-muted);">${s.dealer_name || "Direct Customer"} · Mobile: <b class="mono">${s.mobile_number}</b> · Submitted: ${new Date(s.created_at_server).toLocaleString()}</p>
       </div>
       <div>
-        <div class="panel">
-          <h3>Telemetry &amp; Anti-Fraud Card</h3>
-          <div class="metric-row"><span>Customer Mobile</span><span>${s.mobile_number}</span></div>
-          <div class="metric-row"><span>Dealer</span><span>${s.dealer_name || "Unknown"}${s.dealer_city ? " · " + s.dealer_city : ""}</span></div>
-          <div class="metric-row"><span>Dealer Distance</span><span>${s.dealer_distance_km != null ? s.dealer_distance_km.toFixed(2) + " km" : "N/A"}</span></div>
-          <div class="metric-row"><span>Time Delta</span><span>${Math.round(s.time_delta_seconds || 0)}s</span></div>
-          <div class="metric-row"><span>Risk Score</span><span class="risk-badge ${riskClass}">${s.risk_score}/100</span></div>
-          <div style="margin-top:8px;">${flags.map(f => `<span class="flag-chip">${f}</span>`).join("") || '<span class="muted">No flags</span>'}</div>
+        <span class="status-chip ${s.status === 'APPROVED' ? 'chip-success' : s.status === 'REJECTED' ? 'chip-danger' : 'chip-warning'}" style="font-size:0.85rem;padding:6px 12px;">
+          Status: ${s.status}
+        </span>
+      </div>
+    </div>
 
-          <div class="device-card">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-              <b>Device blueprint</b>
-              <span class="device-badge ${dBadge.cls}">${dBadge.text}</span>
+    <div class="review-grid">
+      <!-- Left: Bill image viewer -->
+      <div>
+        <div class="panel" style="padding:14px;">
+          <div class="panel-title">📷 Uploaded Purchase Invoice</div>
+          <div class="bill-viewer">
+            <img id="billImage" alt="Bill Preview" />
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+            <span style="font-size:0.75rem;color:var(--text-muted);">Inspection viewer</span>
+            <button class="btn btn-secondary btn-sm" onclick="zoomBillImage()">🔍 Open Full Image</button>
+          </div>
+        </div>
+
+        <!-- Fraud Telemetry -->
+        <div class="panel">
+          <div class="panel-title">🛡️ Fraud Prevention Telemetry</div>
+          <div class="detail-row">
+            <span class="detail-label">Risk Assessment Score</span>
+            <span class="detail-val mono" style="color:${s.risk_score >= 60 ? 'var(--danger)' : s.risk_score >= 25 ? 'var(--warning)' : 'var(--success)'}">
+              ${s.risk_score} / 100
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Fraud Flags Detected</span>
+            <span class="detail-val">${s.fraud_flags ? `<span style="color:var(--danger);font-weight:600;">${s.fraud_flags}</span>` : '<span style="color:var(--success);">None detected (Clean)</span>'}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Hardware Device Fingerprint</span>
+            <span class="detail-val mono">${(s.device_fingerprint_hash || '—').slice(0, 16)}...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Quantity Verification & Action -->
+      <div>
+        <div class="panel">
+          <div class="panel-title">📋 Itemized Product Verification</div>
+          <div style="margin-bottom:14px;">
+            ${itemRows}
+          </div>
+
+          <div style="background:var(--primary-subtle);border:1px solid var(--primary-border);border-radius:8px;padding:14px 18px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-weight:600;font-size:0.9rem;">Total Reward to Credit:</span>
+            <span class="mono" id="reviewTotalReward" style="font-size:1.3rem;font-weight:800;color:var(--primary);">
+              LKR ${(s.total_approved_reward_lkr ?? s.total_claimed_reward_lkr ?? 0).toFixed(2)}
+            </span>
+          </div>
+
+          ${isPending ? `
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-success" style="flex:1;padding:12px;" onclick="approveSubmission('${s.id}')">
+                ✓ Approve Claim &amp; Credit Wallet
+              </button>
+              <button class="btn btn-danger" style="flex:1;padding:12px;" onclick="promptRejectSubmission('${s.id}')">
+                ✕ Reject Claim
+              </button>
             </div>
-            <div class="metric-row"><span>Device</span><span>${sum.label || "Unknown"}</span></div>
-            <div class="metric-row"><span>OS / Browser</span><span>${sum.os || "—"} ${sum.osVersion || ""} · ${sum.browser || "—"}</span></div>
-            <div class="metric-row"><span>Screen</span><span>${sum.screen || "—"}</span></div>
-            <div class="metric-row"><span>GPU</span><span style="max-width:55%;text-align:right;overflow:hidden;text-overflow:ellipsis;">${sum.gpu || "—"}</span></div>
-            <div class="metric-row"><span>Cores / Memory</span><span>${sum.cores ?? "—"} / ${sum.memoryGb ?? "—"} GB</span></div>
-            <div class="metric-row"><span>Network</span><span>${sum.network || sum.language || "—"}</span></div>
-            <div class="metric-row"><span>Fingerprint</span><span style="font-family:monospace;font-size:0.75rem;">${(device.fingerprint || "").slice(0, 16)}…</span></div>
-            <div class="metric-row"><span>Device history</span><span>${act.approved || 0} approved · ${act.rejected || 0} rejected · ${act.pending || 0} pending</span></div>
-            ${act.mobiles >= 2 ? `<div style="color:var(--danger);margin-top:6px;font-weight:600;">⚠ This device has been used by ${act.mobiles} different mobile numbers.</div>` : ""}
-            ${act.total >= 2 && act.mobiles < 2 ? `<div style="color:#92400e;margin-top:6px;">This device has submitted ${act.total} claims (same mobile).</div>` : ""}
-          </div>
+          ` : `
+            <div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:10px;background:#f8fafc;border-radius:8px;">
+              This claim has already been <b>${s.status}</b> by ${s.reviewed_by || 'reviewer'} on ${s.reviewed_at ? new Date(s.reviewed_at).toLocaleDateString() : '—'}.
+            </div>
+          `}
         </div>
+
+        <!-- Customer Ledger Snapshot -->
         <div class="panel">
-          <h3>Item Verification &amp; Reward</h3>
-          ${itemRows}
-          <div class="total-line"><span>Total</span><span id="calcTotal">—</span></div>
-          <button class="btn btn-save" id="saveQtyBtn" style="width:100%;margin-top:10px;">Save Verified Quantities</button>
-        </div>
-        <div class="panel">
-          <select id="rejectionCode">
-            <option value="">Select rejection reason (if rejecting)</option>
-            <option value="ILLEGIBLE_BILL">Illegible bill image</option>
-            <option value="QTY_MISMATCH">Quantity mismatch</option>
-            <option value="GEOGRAPHIC_MISMATCH">Geographic mismatch</option>
-            <option value="DUPLICATE_BILL_IMAGE">Duplicate bill image</option>
-            <option value="OTHER">Other</option>
-          </select>
-          <div class="actions">
-            <button class="btn btn-approve" id="approveBtn">Approve &amp; Credit</button>
-            <button class="btn btn-reject" id="rejectBtn">Reject Claim</button>
-          </div>
+          <div class="panel-title">👛 Customer Financial Dossier</div>
+          <div class="detail-row"><span class="detail-label">Store / Dealer</span><span class="detail-val">${s.dealer_name || 'Direct Customer'}</span></div>
+          <div class="detail-row"><span class="detail-label">Current Wallet Balance</span><span class="detail-val mono" style="color:var(--primary);font-size:1.05rem;">LKR ${Number(wallet.balance_lkr || 0).toLocaleString()}</span></div>
+          <div class="detail-row"><span class="detail-label">Approved Claims History</span><span class="detail-val mono">LKR ${Number(stats.approved_lkr || 0).toLocaleString()} (${stats.approved || 0} claims)</span></div>
+          <div class="detail-row"><span class="detail-label">Bank Account Registered</span><span class="detail-val">${bank?.account_name ? `✓ ${bank.bank_name} (${bank.account_number})` : '<span style="color:var(--warning);">No bank saved</span>'}</span></div>
         </div>
       </div>
     </div>
   `;
-
-  recalcTotal();
-  document.querySelectorAll(".verified-qty-input").forEach(inp => inp.addEventListener("input", recalcTotal));
-  document.getElementById("saveQtyBtn").addEventListener("click", saveVerifiedQuantities);
-  document.getElementById("approveBtn").addEventListener("click", approveSubmission);
-  document.getElementById("rejectBtn").addEventListener("click", rejectSubmission);
+  recalcTotalReward();
 }
 
-function recalcTotal() {
+function zoomBillImage() {
+  const img = document.getElementById("billImage");
+  if (img?.src) window.open(img.src, "_blank");
+}
+
+function recalcTotalReward() {
   let total = 0;
   document.querySelectorAll(".verified-qty-input").forEach(inp => {
-    total += (parseFloat(inp.value) || 0) * parseFloat(inp.dataset.rate);
+    const qty = parseFloat(inp.value) || 0;
+    const rate = parseFloat(inp.dataset.rate) || 0;
+    total += (qty * rate);
   });
-  const el = document.getElementById("calcTotal");
+  const el = document.getElementById("reviewTotalReward");
   if (el) el.textContent = `LKR ${total.toFixed(2)}`;
 }
 
-function collectItems() {
-  return [...document.querySelectorAll(".verified-qty-input")].map(inp => ({
-    itemId: parseInt(inp.dataset.itemId, 10),
-    verifiedQty: parseInt(inp.value, 10) || 0
-  }));
-}
-
-async function saveVerifiedQuantities() {
-  await fetch(`${API_BASE}/api/finance/submissions/${currentId}/verify`, {
-    method: "POST", headers: authHeaders(), body: JSON.stringify({ items: collectItems() })
+async function approveSubmission(id) {
+  // First persist quantity adjustments if any
+  const items = [];
+  document.querySelectorAll(".verified-qty-input").forEach(inp => {
+    items.push({
+      itemId: parseInt(inp.dataset.itemId),
+      verifiedQty: parseFloat(inp.value) || 0
+    });
   });
-  alert("Verified quantities saved.");
+
+  try {
+    if (items.length) {
+      await fetch(`${API_BASE}/api/finance/submissions/${id}/verify`, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ items })
+      });
+    }
+    const res = await fetch(`${API_BASE}/api/finance/submissions/${id}/approve`, {
+      method: "POST", headers: authHeaders()
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Approval failed."); return; }
+    alert(`Claim ${id} approved! LKR ${data.totalApproved} credited to customer wallet.`);
+    loadQueue();
+    selectSubmission(id);
+  } catch (err) {
+    alert("Approval error: " + err.message);
+  }
 }
 
-async function approveSubmission() {
-  await saveVerifiedQuantities();
-  const res = await fetch(`${API_BASE}/api/finance/submissions/${currentId}/approve`, {
-    method: "POST", headers: authHeaders()
-  });
-  const data = await res.json();
-  if (!res.ok) { alert(data.error || "Approve failed"); return; }
-  alert(`Approved. Total credited: LKR ${data.totalApproved?.toFixed(2)}`);
-  loadQueue();
-  document.getElementById("reviewPanel").innerHTML = `<div class="panel">Select a submission from the queue to begin review.</div>`;
+async function promptRejectSubmission(id) {
+  const code = prompt("Reason code for rejection (e.g. BLURRY_IMAGE, INVALID_DEALER, UNVERIFIED_ITEMS, DUPLICATE_BILL):", "INVALID_BILL");
+  if (!code) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/finance/submissions/${id}/reject`, {
+      method: "POST", headers: authHeaders(), body: JSON.stringify({ rejectionCode: code })
+    });
+    if (res.ok) {
+      alert(`Claim ${id} marked as REJECTED.`);
+      loadQueue();
+      selectSubmission(id);
+    } else {
+      alert("Failed to reject claim.");
+    }
+  } catch (err) {
+    alert("Error: " + err.message);
+  }
 }
 
-async function rejectSubmission() {
-  const rejectionCode = document.getElementById("rejectionCode").value;
-  if (!rejectionCode) { alert("Please select a rejection reason."); return; }
-  await fetch(`${API_BASE}/api/finance/submissions/${currentId}/reject`, {
-    method: "POST", headers: authHeaders(), body: JSON.stringify({ rejectionCode })
-  });
-  loadQueue();
-  document.getElementById("reviewPanel").innerHTML = `<div class="panel">Select a submission from the queue to begin review.</div>`;
-}
+// -------------------------------------------------------------
+// CUSTOMER SUMMARIES VIEW
+// -------------------------------------------------------------
+async function loadCustomerSummaries() {
+  const panel = document.getElementById("reviewPanel");
+  panel.innerHTML = `<div style="padding:40px 0;text-align:center;color:var(--text-muted);">Loading customer rollups…</div>`;
 
-// ---------- Payouts (Finance Lead) ----------
-async function loadPayouts(rebuild) {
-  const q = rebuild ? "?status=PENDING&rebuild=1" : "?status=PENDING";
-  const res = await fetch(`${API_BASE}/api/finance-lead/payouts${q}`, { headers: authHeaders() });
-  if (res.status === 401) {
-    document.getElementById("reviewPanel").innerHTML = `<div class="panel" style="border:2px solid var(--danger);">
-      <h3>Payouts require Finance Lead role</h3>
-      <p>Your account is <b>${role}</b>. Log in with a <b>finance_lead</b> user to see and process payouts.</p>
-    </div>`;
-    return;
-  }
-  const data = await res.json();
-  if (!res.ok) {
-    document.getElementById("reviewPanel").innerHTML = `<div class="panel"><b>Error:</b> ${data.error || res.status}</div>`;
-    return;
-  }
-  lastPayouts = data.payouts || [];
-  const eligible = data.eligible || [];
-  const topApproved = data.topApproved || [];
-  const stats = data.stats || {};
-  const threshold = data.threshold || 1000;
-  const apiVer = data.apiVersion || "(old API — redeploy Worker)";
-  const list = document.getElementById("queueList");
-  list.innerHTML = `
-    <div style="padding:14px 16px;">
-      <div style="font-weight:600;margin-bottom:4px;">Pending Payouts (${lastPayouts.length})</div>
-      <div class="muted" style="margin-bottom:4px;">Threshold: LKR ${threshold}</div>
-      <div class="muted" style="margin-bottom:4px;font-size:0.75rem;">API: ${apiVer}</div>
-      <div class="muted" style="margin-bottom:8px;font-size:0.75rem;">Wallets: ${stats.wallets ?? "?"} · ≥ threshold: ${stats.walletsOverThreshold ?? "?"}</div>
-      <button class="btn btn-secondary" style="width:100%;padding:8px;" onclick="loadPayouts(false)">↻ Refresh</button>
-      <button class="btn btn-approve" style="width:100%;padding:8px;margin-top:6px;" onclick="rebuildPayouts()">⚡ Rebuild from approved claims</button>
-      <button class="btn btn-secondary" style="width:100%;padding:8px;margin-top:6px;" onclick="exportPayoutsCsv()">Download CSV</button>
-    </div>
-  `;
+  try {
+    const res = await fetch(`${API_BASE}/api/finance/customer-summaries`, { headers: authHeaders() });
+    const data = await res.json();
+    const customers = data.customers || [];
+    const threshold = data.threshold || 1000;
 
-  let rebuildNote = "";
-  if (data.rebuildStats) {
-    const r = data.rebuildStats;
-    rebuildNote = `<div class="panel" style="border:2px solid #1a6b3c;background:#eef7f0;">
-      <h3>Rebuild complete</h3>
-      <p>Mobiles with approvals: <b>${r.mobilesFromApprovals}</b> · Wallets updated: <b>${r.walletsUpserted}</b> · Over threshold: <b>${r.overThreshold}</b></p>
-    </div>`;
-  }
+    const rows = customers.map(c => `
+      <tr>
+        <td>
+          <b style="color:var(--primary);">${c.dealer_name || "Direct Customer"}</b>
+          ${c.customer_code ? `<div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${c.customer_code}</div>` : ''}
+        </td>
+        <td class="mono"><b>${c.mobile_number}</b></td>
+        <td>${c.city || '—'}</td>
+        <td><b>${c.total_submissions}</b> <span style="font-size:0.75rem;color:var(--text-muted);">(A:${c.approved_count} / P:${c.pending_count})</span></td>
+        <td class="mono"><b>LKR ${(c.approved_lkr || 0).toLocaleString()}</b></td>
+        <td class="mono" style="font-size:0.95rem;color:var(--primary);font-weight:700;">
+          LKR ${(c.wallet_balance || 0).toLocaleString()}
+        </td>
+        <td>
+          ${c.has_bank ? `<span class="status-chip chip-success">✓ Bank Saved</span>` : `<span class="status-chip chip-warning">No Bank</span>`}
+        </td>
+        <td>
+          ${c.payout_eligible ? `<span class="status-chip chip-success">Eligible (&ge; ${threshold})</span>` : `<span class="status-chip chip-muted">Accumulating</span>`}
+        </td>
+      </tr>
+    `).join("");
 
-  const eligibleHtml = eligible.length
-    ? `<div class="panel" style="border:2px solid #1a6b3c;">
-        <h3>Wallets ≥ LKR ${threshold} (${eligible.length})</h3>
-        ${eligible.map(e => `
-          <div class="metric-row">
-            <span>${e.mobile_number} <span class="muted">(${e.wallet_status})</span></span>
-            <span><b>LKR ${Number(e.balance_lkr).toFixed(2)}</b>
-              ${Number(e.pending_payouts) > 0 ? " · pending ✓" : " · no payout row"}
-              ${Number(e.has_bank) > 0 ? " · bank ✓" : ' · <span style="color:var(--danger)">no bank</span>'}
-            </span>
-          </div>`).join("")}
-      </div>`
-    : "";
-
-  const topHtml = topApproved.length
-    ? `<div class="panel">
-        <h3>Top approved claim totals (source of truth)</h3>
-        <p class="muted">If these are ≥ ${threshold} but payouts are empty, click <b>Rebuild from approved claims</b>.</p>
-        ${topApproved.map(t => `
-          <div class="metric-row">
-            <span>${t.mobile_number} · ${t.approved_claims} claims</span>
-            <span><b>LKR ${Number(t.approved_total).toFixed(2)}</b>
-              ${Number(t.approved_total) >= threshold ? ' · <span style="color:#166534">eligible</span>' : ""}
-            </span>
-          </div>`).join("")}
-      </div>`
-    : `<div class="panel"><h3>No approved claims found</h3>
-        <p class="muted">Payouts only appear after Finance <b>Approves</b> claims. Customer Master count does not create wallet balance.</p>
-        <p class="muted">API: <code>${apiVer}</code></p>
-      </div>`;
-
-  const payoutsHtml = lastPayouts.length
-    ? lastPayouts.map(p => `
-        <div class="payout-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div>
-              <div style="font-weight:700;">${p.mobile_number}</div>
-              <div class="muted" style="font-size:0.85rem;">${new Date(p.created_at).toLocaleString()} · ${p.approved_claims || 0} approved claims
-                ${p.wallet_balance != null ? " · wallet LKR " + Number(p.wallet_balance).toFixed(2) : ""}</div>
-            </div>
-            <div style="font-size:1.3rem;font-weight:700;">LKR ${Number(p.amount_lkr).toFixed(2)}</div>
-          </div>
-          <div class="bank-info">
-            ${p.account_name
-              ? `<b>${p.account_name}</b> — ${p.bank_name}${p.branch_name ? " (" + p.branch_name + ")" : ""}<br>${p.account_number}`
-              : `<span style="color:var(--danger);">⚠️ Customer has not submitted bank details yet.</span>`}
-          </div>
-          <div>
-            <input type="text" placeholder="ERP Reference" id="erp-${p.id}" />
-            <input type="text" placeholder="Bank Outgoing Ref" id="bankref-${p.id}" />
-            <button class="btn btn-approve" style="width:auto;padding:9px 16px;" onclick="bindPayout(${p.id})" ${p.account_name ? "" : "disabled"}>
-              Mark Paid
-            </button>
-          </div>
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div>
+          <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-0.02em;">Customer Intelligence &amp; Summaries</h2>
+          <p style="font-size:0.85rem;color:var(--text-muted);">Aggregated customer and retail dealer reward history across all submissions.</p>
         </div>
-      `).join("")
-    : `<div class="panel">No pending payout rows yet. Use <b>Rebuild from approved claims</b> if top totals above are ≥ threshold.</div>`;
+        <button class="btn btn-secondary btn-sm" onclick="loadCustomerSummaries()">🔄 Refresh</button>
+      </div>
 
-  document.getElementById("reviewPanel").innerHTML = rebuildNote + eligibleHtml + topHtml + payoutsHtml;
+      <div class="panel" style="padding:0;overflow:hidden;">
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Customer / Dealer</th>
+                <th>Mobile Number</th>
+                <th>City</th>
+                <th>Submissions</th>
+                <th>Total Approved</th>
+                <th>Wallet Balance</th>
+                <th>Bank Account</th>
+                <th>Payout Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);">No customer records.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    panel.innerHTML = `<div class="panel" style="color:red;">Error loading customer summaries: ${e.message}</div>`;
+  }
 }
 
-async function rebuildPayouts() {
-  if (!confirm("Rebuild all wallets from approved claims and create missing payout rows for balances ≥ threshold?")) return;
-  await loadPayouts(true);
+// -------------------------------------------------------------
+// PAYOUTS VIEW IN FINANCE DASHBOARD
+// -------------------------------------------------------------
+async function loadPayoutsView() {
+  const panel = document.getElementById("reviewPanel");
+  panel.innerHTML = `<div style="padding:40px 0;text-align:center;color:var(--text-muted);">Loading payout disbursement batches…</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/finance/payouts?status=ALL`, { headers: authHeaders() });
+    const data = await res.json();
+    const payouts = data.payouts || [];
+    const eligible = data.eligible || [];
+    const threshold = data.threshold || 1000;
+    const canProcess = role === "finance_lead" || role === "admin";
+
+    const rows = payouts.map(p => `
+      <tr>
+        <td class="mono">#${p.id}</td>
+        <td class="mono"><b>${p.mobile_number}</b></td>
+        <td class="mono" style="font-size:1rem;font-weight:700;color:${p.status === 'PENDING' ? 'var(--warning)' : 'var(--success)'};">
+          LKR ${Number(p.amount_lkr).toLocaleString(undefined, {minimumFractionDigits: 2})}
+        </td>
+        <td>
+          ${p.account_name ? `
+            <div style="font-weight:600;font-size:0.8rem;">${p.bank_name} · ${p.branch_name || ''}</div>
+            <div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${p.account_number}</div>
+          ` : '<span class="status-chip chip-warning">No Bank Account</span>'}
+        </td>
+        <td>
+          <span class="status-chip ${p.status === 'PENDING' ? 'chip-warning' : 'chip-success'}">${p.status}</span>
+        </td>
+        <td class="mono" style="font-size:0.75rem;">
+          ${p.erp_reference ? `ERP: ${p.erp_reference}<br>Bank: ${p.bank_reference || '—'}` : '—'}
+        </td>
+        <td>
+          ${p.status === 'PENDING' && canProcess ? `
+            <button class="btn btn-primary btn-sm" onclick="bindFinancePayout(${p.id})">Mark Paid</button>
+          ` : `<span style="font-size:0.75rem;color:var(--text-muted);">${p.status === 'PAID' ? 'Settled' : 'Requires Lead'}</span>`}
+        </td>
+      </tr>
+    `).join("");
+
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div>
+          <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-0.02em;">Payout Disbursements &amp; Bank Settlement</h2>
+          <p style="font-size:0.85rem;color:var(--text-muted);">Execute payments for wallets exceeding LKR ${threshold.toLocaleString()}.</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          ${canProcess ? `<button class="btn btn-secondary btn-sm" onclick="rebuildFinanceWallets()">⚡ Sync from Claims</button>` : ''}
+          <button class="btn btn-primary btn-sm" onclick="exportFinanceCsv()">📥 Export Bank CSV</button>
+        </div>
+      </div>
+
+      <div class="panel" style="padding:0;overflow:hidden;">
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Batch #</th>
+                <th>Mobile Number</th>
+                <th>Payout Amount</th>
+                <th>Bank Details</th>
+                <th>Status</th>
+                <th>ERP / Bank Ref</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);">No payout records.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    panel.innerHTML = `<div class="panel" style="color:red;">Error loading payouts: ${e.message}</div>`;
+  }
 }
 
-function csvEscape(v) {
-  const s = v == null ? "" : String(v);
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
+async function bindFinancePayout(id) {
+  const erp = prompt("Enter ERP Payment Voucher reference (e.g. ERP-VOUCH-2026-09):", `ERP-${Date.now().toString().slice(-6)}`);
+  if (!erp) return;
+  const bank = prompt("Enter Bank Transfer / CEFT transaction ID:", `CEFT-${Math.floor(100000 + Math.random() * 900000)}`);
+  if (!bank) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/finance/payouts/${id}/bind`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ erpReference: erp, bankReference: bank })
+    });
+    if (res.ok) {
+      alert("Payout marked as PAID!");
+      loadPayoutsView();
+    } else {
+      const data = await res.json();
+      alert(data.error || "Failed to mark payout.");
+    }
+  } catch (err) {
+    alert("Error: " + err.message);
+  }
 }
 
-function downloadCsv(filename, rows) {
-  const bom = "\uFEFF";
-  const text = bom + rows.map(r => r.map(csvEscape).join(",")).join("\n");
-  const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
+async function rebuildFinanceWallets() {
+  if (!confirm("Rebuild all customer wallets from approved claims?")) return;
+  await fetch(`${API_BASE}/api/finance/payouts/rebuild`, { method: "POST", headers: authHeaders() });
+  alert("Wallets synchronized.");
+  loadPayoutsView();
 }
 
-async function exportPayoutsCsv() {
-  const header = ["id", "mobile_number", "amount_lkr", "status", "account_name", "account_number", "bank_name", "branch_name", "approved_claims", "created_at", "erp_reference", "bank_reference"];
-  const rows = [header, ...lastPayouts.map(p => header.map(k => p[k] ?? ""))];
-  downloadCsv(`payouts-${new Date().toISOString().slice(0, 10)}.csv`, rows);
-  await fetch(`${API_BASE}/api/finance-lead/payouts/export-log`, {
-    method: "POST", headers: authHeaders(), body: JSON.stringify({ format: "csv", rows: lastPayouts.length })
-  }).catch(() => {});
-}
-
-async function exportPayoutsExcel() {
-  // Same CSV with BOM — opens cleanly in Excel
-  await exportPayoutsCsv();
-}
-
-async function bindPayout(payoutId) {
-  const erpReference = document.getElementById(`erp-${payoutId}`).value.trim();
-  const bankReference = document.getElementById(`bankref-${payoutId}`).value.trim();
-  if (!erpReference || !bankReference) { alert("Both ERP reference and bank reference are required."); return; }
-
-  const res = await fetch(`${API_BASE}/api/finance-lead/payouts/${payoutId}/bind`, {
-    method: "POST", headers: authHeaders(), body: JSON.stringify({ erpReference, bankReference })
-  });
-  const data = await res.json();
-  if (!res.ok) { alert(data.error); return; }
-  loadPayouts();
+function exportFinanceCsv() {
+  fetch(`${API_BASE}/api/finance/payouts?status=ALL`, { headers: authHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      const payouts = data.payouts || [];
+      if (!payouts.length) return alert("No payout records available to export.");
+      const headers = ["Batch ID", "Customer Mobile", "Amount LKR", "Status", "Account Name", "Bank Name", "Branch", "Account Number", "ERP Reference", "Bank Reference", "Date"];
+      const rows = payouts.map(p => [
+        p.id,
+        `"${p.mobile_number}"`,
+        p.amount_lkr,
+        p.status,
+        `"${p.account_name || ''}"`,
+        `"${p.bank_name || ''}"`,
+        `"${p.branch_name || ''}"`,
+        `"${p.account_number || ''}"`,
+        `"${p.erp_reference || ''}"`,
+        `"${p.bank_reference || ''}"`,
+        p.created_at
+      ]);
+      const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `cantec_finance_payouts_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    })
+    .catch(err => alert("Export error: " + err.message));
 }
 
 if (token) showApp();

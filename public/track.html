@@ -3,52 +3,144 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Track Your Claim</title>
+<title>CanTec Rewards — Track Your Claim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --primary: #1a6b3c; --bg: #f5f7f6; --card: #fff; --border: #e2e5e4; --muted: #6b7280; }
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding-bottom: 16px; }
-  .app-header { background: var(--primary); color: #fff; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 14px; display: flex; align-items: center; gap: 10px; }
-  .app-header .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; opacity: 0.85; }
-  .app-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
-  .app-header .tagline { font-size: 0.75rem; opacity: 0.85; margin-left: auto; }
-  .page-body { padding: 16px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
-  h1 { font-size: 1.3rem; margin: 0 0 12px; }
-  input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; font-size: 1rem; }
-  button { width: 100%; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
-  .status-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.85rem; font-weight: 600; }
+  :root {
+    --primary: #0f766e;
+    --primary-hover: #0d9488;
+    --primary-subtle: #f0fdfa;
+    --primary-border: #99f6e4;
+    --brand-dark: #091e19;
+    
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: 24px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app-header {
+    background: var(--brand-dark);
+    color: #ffffff;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .brand-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1rem;
+    color: #ffffff;
+  }
+  .app-header h2 { margin: 0; font-size: 1.05rem; font-weight: 800; letter-spacing: -0.02em; }
+  .app-header .tagline { font-size: 0.72rem; color: #2dd4bf; margin-left: auto; text-transform: uppercase; font-weight: 600; }
+
+  .page-body {
+    max-width: 540px;
+    margin: 0 auto;
+    padding: 20px 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+  h1 { font-size: 1.35rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.02em; }
+  
+  input {
+    width: 100%; padding: 11px 13px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; font-size: 0.95rem; font-family: inherit; outline: none; transition: border-color 0.15s;
+  }
+  input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12); }
+
+  button {
+    width: 100%; padding: 13px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: background 0.15s;
+  }
+  button:hover { background: var(--primary-hover); }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
   .status-PENDING, .status-IN_REVIEW { background: #fef3c7; color: #92400e; }
   .status-APPROVED { background: #dcfce7; color: #166534; }
   .status-REJECTED { background: #fee2e2; color: #991b1b; }
-  .item-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-  .progress-track { background: #e5e7eb; border-radius: 999px; height: 10px; overflow: hidden; margin-top: 6px; }
-  .progress-fill { background: var(--primary); height: 100%; }
-  .muted { color: var(--muted); font-size: 0.85rem; }
-  .bank-form input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; font-size: 0.95rem; }
-  .bank-form button { width: 100%; padding: 11px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
-  .banner-warn { background: #fef3c7; color: #92400e; padding: 10px 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 10px; }
-  .banner-ok { background: #dcfce7; color: #166534; padding: 10px 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 10px; }
+
+  .item-row {
+    display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.88rem;
+  }
+  .item-row:last-child { border-bottom: none; }
+
+  .progress-track { background: #e2e8f0; border-radius: 999px; height: 8px; overflow: hidden; margin-top: 8px; }
+  .progress-fill { background: var(--primary); height: 100%; transition: width 0.3s; }
+  .muted { color: var(--muted); font-size: 0.82rem; }
+
+  .bank-form input { margin-bottom: 10px; }
+  .banner-warn { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 12px 14px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 12px; }
+  .banner-ok { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; padding: 12px 14px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 12px; }
 </style>
 </head>
 <body>
 
 <div class="app-header">
-  <span class="logo-dot"></span>
+  <div class="brand-icon">C</div>
   <h2>CanTec Rewards</h2>
-  <span class="tagline">Track Your Claim</span>
+  <span class="tagline">Claim Tracking</span>
 </div>
 
 <div class="page-body">
 
 <div class="card">
   <h1>Track Your Claim</h1>
-  <input type="text" id="mobileInput" placeholder="Mobile Number" />
-  <input type="text" id="submissionIdInput" placeholder="Submission ID (e.g. SUB-2026-89412)" />
-  <button id="trackBtn">Check Status</button>
+  <p class="muted" style="margin-bottom:14px;">Enter your contact mobile number and assigned submission ID to view live verification status and wallet balance.</p>
+  
+  <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;text-transform:uppercase;">Registered Mobile</label>
+  <input type="text" id="mobileInput" placeholder="e.g. 077 123 4567" />
+  
+  <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;text-transform:uppercase;">Submission ID</label>
+  <input type="text" id="submissionIdInput" placeholder="e.g. SUB-2026-89412" class="mono" />
+  
+  <button id="trackBtn">Check Claim Status</button>
 </div>
 
 <div id="resultCard" style="display:none;"></div>
+
+<p style="text-align:center;margin-top:16px;">
+  <a style="color:var(--primary);font-size:0.88rem;font-weight:600;text-decoration:none;" href="/">← Submit another purchase claim</a>
+</p>
+<p style="text-align:center;margin-top:10px;font-size:0.8rem;">
+  <a href="/admin/index.html" style="color:var(--muted);text-decoration:none;">Admin Console</a> &nbsp;•&nbsp; <a href="/finance.html" style="color:var(--muted);text-decoration:none;">Finance Review</a>
+</p>
 
 </div>
 
@@ -65,45 +157,63 @@ document.getElementById("trackBtn").addEventListener("click", async () => {
   lastMobile = mobile;
   lastSubmissionId = submissionId;
 
-  const res = await fetch(`${window.API_BASE || ""}/api/track?mobile=${encodeURIComponent(mobile)}&submissionId=${encodeURIComponent(submissionId)}`);
-  const data = await res.json();
-
   resultCard.style.display = "block";
-  if (!res.ok) {
-    resultCard.innerHTML = `<div class="card">⚠️ ${data.error || "Claim not found"}</div>`;
-    return;
-  }
+  resultCard.innerHTML = `<div class="card" style="text-align:center;color:var(--muted);">Checking status…</div>`;
 
-  const s = data.submission;
-  const itemsHtml = data.items.map(i =>
-    `<div class="item-row"><span>${i.name}</span><span>Claimed: ${i.claimed_qty}${i.verified_qty != null ? " | Verified: " + i.verified_qty : ""}</span></div>`
-  ).join("");
+  try {
+    const res = await fetch(`${window.API_BASE || ""}/api/track?mobile=${encodeURIComponent(mobile)}&submissionId=${encodeURIComponent(submissionId)}`);
+    const data = await res.json();
 
-  const threshold = 1000;
-  const pct = Math.min(100, Math.round((data.wallet.balance_lkr / threshold) * 100));
+    if (!res.ok) {
+      resultCard.innerHTML = `<div class="card" style="border-color:#fecaca;background:#fef2f2;color:#991b1b;">⚠️ ${data.error || "Claim not found. Verify mobile number and ID."}</div>`;
+      return;
+    }
 
-  resultCard.innerHTML = `
-    <div class="card">
-      <div class="muted">Submission ID</div>
-      <div><b>${s.id}</b></div>
-      <div class="muted" style="margin-top:8px;">Status</div>
-      <span class="status-badge status-${s.status}">${s.status.replace("_"," ")}</span>
-    </div>
-    <div class="card">
-      <div class="muted" style="margin-bottom:6px;">Submitted Items</div>
-      ${itemsHtml}
-    </div>
-    <div class="card">
-      <div class="muted">Wallet Balance</div>
-      <div style="font-size:1.4rem;font-weight:700;">${data.wallet.balance_lkr.toFixed(2)} LKR</div>
-      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <div class="muted" style="margin-top:4px;">${pct}% to ${threshold} LKR minimum withdrawal</div>
-    </div>
-    <div id="bankCard"></div>
-  `;
+    const s = data.submission;
+    const itemsHtml = data.items.map(i =>
+      `<div class="item-row">
+        <span><b>${i.name}</b></span>
+        <span class="mono">Claimed: ${i.claimed_qty}${i.verified_qty != null ? " · Verified: " + i.verified_qty : ""}</span>
+      </div>`
+    ).join("");
 
-  if (data.wallet.status === "PENDING_PAYOUT") {
+    const threshold = 1000;
+    const pct = Math.min(100, Math.round((data.wallet.balance_lkr / threshold) * 100));
+
+    resultCard.innerHTML = `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span class="muted">Submission ID</span>
+          <span class="status-badge status-${s.status}">${s.status.replace("_"," ")}</span>
+        </div>
+        <div class="mono" style="font-size:1.1rem;font-weight:700;">${s.id}</div>
+        <div class="muted" style="margin-top:4px;">Submitted on ${new Date(s.created_at_server).toLocaleString()}</div>
+      </div>
+
+      <div class="card">
+        <div class="muted" style="margin-bottom:8px;font-weight:600;text-transform:uppercase;">Submitted Products</div>
+        ${itemsHtml}
+      </div>
+
+      <div class="card">
+        <div class="muted" style="font-weight:600;text-transform:uppercase;">Reward Wallet Balance</div>
+        <div class="mono" style="font-size:1.5rem;font-weight:800;color:var(--primary);margin-top:2px;">
+          LKR ${data.wallet.balance_lkr.toFixed(2)}
+        </div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <div class="muted" style="margin-top:6px;display:flex;justify-content:space-between;">
+          <span>${pct}% of threshold</span>
+          <span>Target: LKR ${threshold.toLocaleString()}</span>
+        </div>
+      </div>
+
+      <div id="bankCard"></div>
+    `;
+
+    // Always load bank details card so customer can enter or update
     loadBankDetails();
+  } catch (err) {
+    resultCard.innerHTML = `<div class="card" style="color:red;">Error: ${err.message}</div>`;
   }
 });
 
@@ -111,24 +221,34 @@ async function loadBankDetails() {
   const res = await fetch(`${window.API_BASE || ""}/api/track/bank-details?mobile=${encodeURIComponent(lastMobile)}&submissionId=${encodeURIComponent(lastSubmissionId)}`);
   const data = await res.json();
   const bankCard = document.getElementById("bankCard");
+  if (!bankCard) return;
   const d = data.details || {};
-
-  // Prefill from previously saved details for this mobile number — customer does not re-enter everything.
   const has = !!data.hasDetails;
+
   bankCard.innerHTML = `
     <div class="card">
+      <h3 style="font-size:1rem;font-weight:700;margin-bottom:8px;">Direct Bank Account Payout</h3>
       ${has
-        ? `<div class="banner-ok">✅ Bank details are on file for this mobile number. Finance will process your payment shortly. You can update them below if needed.</div>
-           <div class="muted">On file</div>
-           <div style="margin-bottom:10px;">${d.account_name} — ${d.bank_name}${d.branch_name ? " (" + d.branch_name + ")" : ""} · ${d.account_number}</div>`
-        : `<div class="banner-warn">⚠️ Your reward has reached the payout threshold. Please add your bank details so Finance can send your payment.</div>`}
+        ? `<div class="banner-ok">✅ Your bank details are safely registered. Approved payouts will be transferred automatically.</div>
+           <div class="muted">Registered details:</div>
+           <div style="font-size:0.88rem;font-weight:600;margin-bottom:12px;">${d.account_name} — ${d.bank_name}${d.branch_name ? " (" + d.branch_name + ")" : ""} · <span class="mono">${d.account_number}</span></div>`
+        : `<div class="banner-warn">⚠️ Add your bank details below so Finance can disburse your reward payment via direct transfer.</div>`}
+      
       <div class="bank-form">
-        <input type="text" id="bankAccountName" placeholder="Account Holder Name" value="${has ? (d.account_name || "").replace(/"/g, "&quot;") : ""}" />
-        <input type="text" id="bankAccountNumber" placeholder="${has ? "Account Number (leave blank to keep current)" : "Account Number"}" />
-        <input type="text" id="bankName" placeholder="Bank Name" value="${has ? (d.bank_name || "").replace(/"/g, "&quot;") : ""}" />
-        <input type="text" id="bankBranch" placeholder="Branch (optional)" value="${has ? (d.branch_name || "").replace(/"/g, "&quot;") : ""}" />
-        <button id="saveBankBtn">${has ? "Update Bank Details" : "Submit Bank Details"}</button>
-        <div id="bankMsg" class="muted" style="margin-top:6px;"></div>
+        <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Account Holder Name</label>
+        <input type="text" id="bankAccountName" placeholder="Name as shown in bank passbook" value="${has ? (d.account_name || "").replace(/"/g, "&quot;") : ""}" />
+        
+        <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Bank Account Number</label>
+        <input type="text" id="bankAccountNumber" placeholder="${has ? "Account Number (leave blank to retain current)" : "Account Number"}" class="mono" />
+        
+        <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Bank Name</label>
+        <input type="text" id="bankName" placeholder="e.g. Commercial Bank of Ceylon / Sampath Bank" value="${has ? (d.bank_name || "").replace(/"/g, "&quot;") : ""}" />
+        
+        <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Branch Name (Optional)</label>
+        <input type="text" id="bankBranch" placeholder="e.g. Colombo Fort" value="${has ? (d.branch_name || "").replace(/"/g, "&quot;") : ""}" />
+        
+        <button id="saveBankBtn">${has ? "Update Bank Details" : "Save Bank Details for Payout"}</button>
+        <div id="bankMsg" style="margin-top:8px;font-size:0.85rem;text-align:center;"></div>
       </div>
     </div>
   `;
@@ -143,18 +263,16 @@ async function loadBankDetails() {
       branchName: document.getElementById("bankBranch").value.trim() || undefined,
     };
     const msg = document.getElementById("bankMsg");
-    // On update, account number can be blank (keeps existing). On first submit it is required.
     if (!body.accountName || !body.bankName || (!has && !body.accountNumber)) {
-      msg.textContent = has
-        ? "Account name and bank name are required."
-        : "Account name, number, and bank name are required.";
+      msg.style.color = "red";
+      msg.textContent = "Account name, account number, and bank name are required.";
       return;
     }
     const res = await fetch(`${window.API_BASE || ""}/api/track/bank-details`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
     });
-    const data = await res.json();
-    if (!res.ok) { msg.textContent = data.error; return; }
+    const resData = await res.json();
+    if (!res.ok) { msg.style.color = "red"; msg.textContent = resData.error || "Failed to save."; return; }
     loadBankDetails();
   });
 }

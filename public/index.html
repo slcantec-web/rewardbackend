@@ -3,105 +3,147 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Claim Your Reward</title>
+<title>CanTec Rewards — Purchase Reward Claim</title>
 <link rel="manifest" href="/manifest.json" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --primary: #1a6b3c;
-    --bg: #f5f7f6;
+    --primary: #0f766e;
+    --primary-hover: #0d9488;
+    --primary-subtle: #f0fdfa;
+    --primary-border: #99f6e4;
+    --brand-dark: #091e19;
+    
+    --bg: #f8fafc;
     --card: #ffffff;
-    --text: #1a1a1a;
-    --muted: #6b7280;
-    --border: #e2e5e4;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --radius: 12px;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--bg);
     color: var(--text);
-    margin: 0;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    -webkit-font-smoothing: antialiased;
   }
+  
   .app-header {
-    background: var(--primary);
-    color: #fff;
-    padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 14px;
+    background: var(--brand-dark);
+    color: #ffffff;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 16px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
-  .app-header .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; opacity: 0.85; }
-  .app-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
-  .app-header .tagline { font-size: 0.75rem; opacity: 0.85; margin-left: auto; }
-  .page-body { padding: 16px; }
+  .brand-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1rem;
+    color: #ffffff;
+  }
+  .app-header h2 { margin: 0; font-size: 1.05rem; font-weight: 800; letter-spacing: -0.02em; }
+  .app-header .tagline { font-size: 0.72rem; color: #2dd4bf; margin-left: auto; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; }
+
+  .page-body {
+    max-width: 540px;
+    margin: 0 auto;
+    padding: 20px 16px;
+  }
   .card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 14px;
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
-  h1 { font-size: 1.3rem; margin: 0 0 4px; }
-  .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 16px; }
-  label { font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 6px; }
+  h1 { font-size: 1.35rem; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.02em; }
+  .subtitle { color: var(--muted); font-size: 0.88rem; line-height: 1.4; }
+  
+  label { font-weight: 600; font-size: 0.82rem; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text); }
   select, input[type=text] {
-    width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem;
+    width: 100%; padding: 11px 13px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; font-family: inherit; outline: none; transition: border-color 0.15s;
   }
+  select:focus, input[type=text]:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+  }
+
   .product-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 0; border-bottom: 1px solid var(--border);
+    padding: 12px 0; border-bottom: 1px solid var(--border);
   }
   .product-row:last-child { border-bottom: none; }
-  .product-name { font-weight: 500; }
+  .product-name { font-weight: 600; font-size: 0.92rem; }
   .stepper { display: flex; align-items: center; gap: 10px; }
   .stepper button {
-    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--bg); font-size: 1.1rem; cursor: pointer;
+    width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border);
+    background: #f8fafc; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 600;
   }
-  .stepper span { min-width: 24px; text-align: center; font-weight: 600; }
+  .stepper button:active { background: #e2e8f0; }
+  .stepper span { min-width: 28px; text-align: center; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
   .upload-box {
-    border: 2px dashed var(--border); border-radius: 10px; padding: 20px;
-    text-align: center; color: var(--muted); cursor: pointer;
+    border: 2px dashed #cbd5e1; border-radius: 10px; padding: 26px 16px;
+    text-align: center; color: var(--muted); cursor: pointer; transition: all 0.15s; background: #fafbfb;
   }
-  .upload-box.has-file { border-color: var(--primary); color: var(--primary); }
+  .upload-box:hover { border-color: var(--primary); background: var(--primary-subtle); color: var(--primary); }
+  .upload-box.has-file { border-color: var(--primary); background: var(--primary-subtle); color: var(--primary); }
   #billFileInput { display: none; }
-  .telemetry-line { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 4px 0; }
-  .status-ok { color: var(--primary); }
+
+  .telemetry-line { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 6px 0; border-bottom: 1px dashed #f1f5f9; }
+  .telemetry-line:last-child { border-bottom: none; }
+  .status-ok { color: var(--primary); font-weight: 600; }
   .status-pending { color: var(--muted); }
+
   .submit-btn {
     width: 100%; padding: 14px; background: var(--primary); color: white; border: none;
-    border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer;
+    border-radius: 10px; font-size: 1rem; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(15, 118, 110, 0.3); transition: background 0.15s;
   }
-  .submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+  .submit-btn:hover:not(:disabled) { background: var(--primary-hover); }
+  .submit-btn:disabled { background: #cbd5e1; color: #64748b; cursor: not-allowed; box-shadow: none; }
+
   .result-banner {
-    text-align: center; padding: 16px; border-radius: 10px; margin-bottom: 14px; display: none;
+    text-align: center; padding: 18px; border-radius: 10px; margin-bottom: 16px; display: none;
   }
-  .result-banner.ok { background: #e6f4ea; color: var(--primary); }
-  .result-banner.err { background: #fde8e8; color: #b91c1c; }
-  a.track-link { color: var(--primary); font-size: 0.85rem; }
+  .result-banner.ok { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+  .result-banner.err { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  a.track-link { color: var(--primary); font-size: 0.88rem; font-weight: 600; text-decoration: none; }
 </style>
 </head>
 <body>
 
 <div class="app-header">
-  <span class="logo-dot"></span>
+  <div class="brand-icon">C</div>
   <h2>CanTec Rewards</h2>
-  <span class="tagline">Purchase Reward Claim</span>
+  <span class="tagline">Official Claim</span>
 </div>
 
 <div class="page-body">
 
 <div class="card">
   <h1>Submit Your Purchase</h1>
-  <div class="subtitle">Select what you bought, attach your bill, and submit for reward review.</div>
+  <div class="subtitle">Select purchased CanTec products, upload clear invoice proof, and submit for instant verification.</div>
 </div>
 
 <div id="resultBanner" class="result-banner"></div>
 
 <div class="card">
   <label for="dealerSearch">Hardware Store / Dealer</label>
-  <input type="text" id="dealerSearch" placeholder="Search dealer name..." />
-  <select id="dealerSelect" style="margin-top:8px;"></select>
+  <input type="text" id="dealerSearch" placeholder="Type store name or city to search..." />
+  <select id="dealerSelect" style="margin-top:10px;"></select>
 </div>
 
 <div class="card">
@@ -110,39 +152,43 @@
 </div>
 
 <div class="card">
-  <label>Attach Bill Image</label>
+  <label>Attach Bill / Invoice Photo</label>
   <div class="upload-box" id="uploadBox">
-    📷 Tap to take a photo or upload your bill
+    📷 Tap to take a photo or upload bill invoice
     <input type="file" id="billFileInput" accept="image/*" capture="environment" />
   </div>
-  <div id="fileNameLabel" style="margin-top:6px;font-size:0.85rem;color:var(--muted);"></div>
+  <div id="fileNameLabel" style="margin-top:8px;font-size:0.85rem;color:var(--primary);font-weight:600;"></div>
 </div>
 
 <div class="card">
-  <label>Automated Telemetry Status</label>
+  <label>Automated Verification Telemetry</label>
   <div class="telemetry-line">
-    <span>📍 Location</span>
+    <span>📍 GPS Location</span>
     <span id="gpsStatus" class="status-pending">Requesting…</span>
   </div>
   <div class="telemetry-line">
-    <span>🕒 Time</span>
+    <span>🕒 Capture Timestamp</span>
     <span id="timeStatus" class="status-ok"></span>
   </div>
   <div class="telemetry-line">
-    <span>📱 Device</span>
+    <span>📱 Device Fingerprint</span>
     <span id="deviceStatus" class="status-ok">Captured</span>
   </div>
 </div>
 
 <div class="card">
-  <label for="mobileInput">Your Mobile Number</label>
-  <input type="text" id="mobileInput" placeholder="+94 7X XXX XXXX" />
+  <label for="mobileInput">Your Contact Mobile Number</label>
+  <input type="text" id="mobileInput" placeholder="e.g. 077 123 4567" />
+  <div style="font-size:0.75rem;color:var(--muted);margin-top:4px;">Used to disburse approved reward payouts directly to your account.</div>
 </div>
 
 <button class="submit-btn" id="submitBtn" disabled>Submit Claim &amp; Get Tracking ID</button>
 
-<p style="text-align:center;margin-top:14px;">
-  <a class="track-link" href="/track.html">Already submitted? Track your claim →</a>
+<p style="text-align:center;margin-top:18px;">
+  <a class="track-link" href="/track.html">Already submitted? Track your claim &amp; bank status →</a>
+</p>
+<p style="text-align:center;margin-top:10px;font-size:0.8rem;">
+  <a href="/admin/index.html" style="color:var(--muted);text-decoration:none;">Admin Console</a> &nbsp;•&nbsp; <a href="/finance.html" style="color:var(--muted);text-decoration:none;">Finance Review</a>
 </p>
 
 </div>

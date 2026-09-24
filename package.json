@@ -3,15 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "tsx server.ts",
+    "build": "tsc --noEmit",
+    "start": "tsx server.ts",
     "deploy": "wrangler deploy",
     "db:migrate": "wrangler d1 execute reward-system-db --file=./schema.sql",
     "db:migrate:remote": "wrangler d1 execute reward-system-db --remote --file=./schema.sql"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.1",
     "hono": "^4.13.9"
   },
   "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "wrangler": "^3.90.0"
   }
