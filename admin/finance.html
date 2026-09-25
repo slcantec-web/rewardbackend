@@ -871,7 +871,7 @@ function renderReview(data) {
           <div class="detail-row"><span class="detail-label">Store / Dealer</span><span class="detail-val">${s.dealer_name || 'Direct Customer'}</span></div>
           <div class="detail-row"><span class="detail-label">Current Wallet Balance</span><span class="detail-val mono" style="color:var(--primary);font-size:1.05rem;">LKR ${Number(wallet.balance_lkr || 0).toLocaleString()}</span></div>
           <div class="detail-row"><span class="detail-label">Approved Claims History</span><span class="detail-val mono">LKR ${Number(stats.approved_lkr || 0).toLocaleString()} (${stats.approved || 0} claims)</span></div>
-          <div class="detail-row"><span class="detail-label">Bank Account Registered</span><span class="detail-val">${bank?.account_name ? `✓ ${bank.bank_name} (${bank.account_number})` : '<span style="color:var(--warning);">No bank saved</span>'}</span></div>
+          <div class="detail-row"><span class="detail-label">Bank Account Registered</span><span class="detail-val">${bank?.account_name ? `✓ ${bank.bank_name} (${bank.account_number})` : `<span style="color:var(--warning);">No bank saved</span> <button class="btn btn-primary btn-sm" style="margin-left:8px;" onclick="shareBankInvite('${s.mobile_number}')">Request bank details</button>`}</span></div>
         </div>
       </div>
     </div>
@@ -943,6 +943,66 @@ async function promptRejectSubmission(id) {
   }
 }
 
+
+// -------------------------------------------------------------
+// Bank-details invite link (eligible, no bank yet)
+// -------------------------------------------------------------
+function claimPortalBase() {
+  return (window.CLAIM_PORTAL_URL || "").replace(/\/$/, "");
+}
+
+function toWhatsAppPhone(mobile) {
+  let d = String(mobile || "").replace(/\D/g, "");
+  if (d.startsWith("0") && d.length >= 9) d = "94" + d.slice(1);
+  if (d.length === 9 && d.startsWith("7")) d = "94" + d;
+  return d;
+}
+
+async function createBankInvite(mobile) {
+  const res = await fetch(`${API_BASE}/api/finance/bank-invite`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ mobile }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not create invite");
+  const base = claimPortalBase();
+  if (!base) throw new Error("CLAIM_PORTAL_URL is not set in admin/config.js");
+  const url = base + (data.path || `/bank.html?token=${data.token}`);
+  return { ...data, url };
+}
+
+async function shareBankInvite(mobile) {
+  try {
+    const inv = await createBankInvite(mobile);
+    const text = `CanTec Rewards: please add your bank account for payout using this secure link (valid 7 days):\n${inv.url}`;
+    const wa = toWhatsAppPhone(mobile);
+    const choice = prompt(
+      `Bank details link for ${mobile}:\n\n${inv.url}\n\n` +
+      `OK = copy link to clipboard\n` +
+      `Or type WA to open WhatsApp with message`,
+      "OK"
+    );
+    if (choice === null) return;
+    if (String(choice).trim().toUpperCase() === "WA") {
+      const waUrl = wa
+        ? `https://wa.me/${wa}?text=${encodeURIComponent(text)}`
+        : `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(waUrl, "_blank", "noopener");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(inv.url);
+      alert("Link copied to clipboard.\n\n" + inv.url);
+    } catch {
+      prompt("Copy this link:", inv.url);
+    }
+  } catch (e) {
+    alert(e.message || String(e));
+  }
+}
+
+
 // -------------------------------------------------------------
 // CUSTOMER SUMMARIES VIEW
 // -------------------------------------------------------------
@@ -970,7 +1030,12 @@ async function loadCustomerSummaries() {
           LKR ${(c.wallet_balance || 0).toLocaleString()}
         </td>
         <td>
-          ${c.has_bank ? `<span class="status-chip chip-success">✓ Bank Saved</span>` : `<span class="status-chip chip-warning">No Bank</span>`}
+          ${c.has_bank
+            ? `<span class="status-chip chip-success">✓ Bank Saved</span>`
+            : `<span class="status-chip chip-warning">No Bank</span>
+               <div style="margin-top:6px;">
+                 <button class="btn btn-primary btn-sm" onclick="shareBankInvite('${c.mobile_number}')">Request bank details</button>
+               </div>`}
         </td>
         <td>
           ${c.payout_eligible ? `<span class="status-chip chip-success">Eligible (&ge; ${threshold})</span>` : `<span class="status-chip chip-muted">Accumulating</span>`}

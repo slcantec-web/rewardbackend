@@ -1153,6 +1153,203 @@ export function registerExtras(app: App) {
     return c.json({ ok: true, bound: true, message: "Bank account permanently linked to this mobile number." });
   });
 
+  // ---------- Bank details invite links (eligible, no bank yet) ----------
+  async function ensureBankInvitesTable(db: D1Database) {
+    await db.prepare(
+      `CREATE TABLE IF NOT EXISTS bank_invites (
+        token TEXT PRIMARY KEY,
+        mobile_number TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        expires_at TEXT NOT NULL,
+        used_at TEXT
+      )`
+    ).run();
+  }
+
+  function randomToken(): string {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  /** Staff creates a time-limited link for a customer to submit bank details */
+  app.post("/api/finance/bank-invite", async (c) => {
+    const session = await financeSession(c, ["finance_staff", "finance_lead"]);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+
+    const body = await c.req.json<{ mobile?: string }>().catch(() => ({} as any));
+    const mobile = String(body.mobile || "").trim();
+    if (!mobile || mobile.length < 9) return c.json({ error: "Valid mobile number is required" }, 400);
+
+    // Prefer customers who have at least one submission or a wallet
+    const known =
+      (await c.env.DB.prepare(`SELECT mobile_number FROM submissions WHERE mobile_number = ? LIMIT 1`).bind(mobile).first()) ||
+      (await c.env.DB.prepare(`SELECT mobile_number FROM wallets WHERE mobile_number = ?`).bind(mobile).first());
+    if (!known) return c.json({ error: "No claims or wallet found for this mobile" }, 404);
+
+    const existingBank = await c.env.DB.prepare(`SELECT mobile_number FROM customer_bank_details WHERE mobile_number = ?`)
+      .bind(mobile)
+      .first();
+    if (existingBank) {
+      return c.json({ error: "This customer already has bank details on file", hasBank: true }, 409);
+    }
+
+    await ensureBankInvitesTable(c.env.DB);
+    const token = randomToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    await c.env.DB.prepare(
+      `INSERT INTO bank_invites (token, mobile_number, created_by, expires_at) VALUES (?,?,?,?)`
+    )
+      .bind(token, mobile, session.sub, expiresAt)
+      .run();
+
+    await c.env.DB.prepare(
+      `INSERT INTO finance_audit_trail (actor, submission_id, action, details_json) VALUES (?,?,?,?)`
+    )
+      .bind(session.sub, null, "BANK_INVITE", JSON.stringify({ mobile, token: token.slice(0, 8) + "…", expiresAt }))
+      .run();
+
+    // Path only — staff UI prefixes CLAIM_PORTAL_URL
+    const path = `/bank.html?token=${token}`;
+    return c.json({
+      ok: true,
+      token,
+      path,
+      mobile,
+      expiresAt,
+      message: "Share this link with the customer so they can add bank details for payout.",
+    });
+  });
+
+  // Also available under admin prefix
+  app.post("/api/admin/bank-invite", async (c) => {
+    const session = await adminSession(c);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    // Re-use same logic via internal call pattern — duplicate thin wrapper
+    const body = await c.req.json<{ mobile?: string }>().catch(() => ({} as any));
+    const mobile = String(body.mobile || "").trim();
+    if (!mobile || mobile.length < 9) return c.json({ error: "Valid mobile number is required" }, 400);
+
+    const known =
+      (await c.env.DB.prepare(`SELECT mobile_number FROM submissions WHERE mobile_number = ? LIMIT 1`).bind(mobile).first()) ||
+      (await c.env.DB.prepare(`SELECT mobile_number FROM wallets WHERE mobile_number = ?`).bind(mobile).first());
+    if (!known) return c.json({ error: "No claims or wallet found for this mobile" }, 404);
+
+    const existingBank = await c.env.DB.prepare(`SELECT mobile_number FROM customer_bank_details WHERE mobile_number = ?`)
+      .bind(mobile)
+      .first();
+    if (existingBank) return c.json({ error: "This customer already has bank details on file", hasBank: true }, 409);
+
+    await ensureBankInvitesTable(c.env.DB);
+    const token = randomToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    await c.env.DB.prepare(
+      `INSERT INTO bank_invites (token, mobile_number, created_by, expires_at) VALUES (?,?,?,?)`
+    )
+      .bind(token, mobile, session.sub, expiresAt)
+      .run();
+
+    await c.env.DB.prepare(`INSERT INTO system_audit_log (actor, action, entity_type, entity_id, details_json) VALUES (?,?,?,?,?)`)
+      .bind(session.sub, "BANK_INVITE", "mobile", mobile, JSON.stringify({ expiresAt }))
+      .run();
+
+    return c.json({ ok: true, token, path: `/bank.html?token=${token}`, mobile, expiresAt });
+  });
+
+  app.get("/api/public/bank-invite", async (c) => {
+    const token = (c.req.query("token") || "").trim();
+    if (!token) return c.json({ error: "token required" }, 400);
+    await ensureBankInvitesTable(c.env.DB);
+    const inv = await c.env.DB.prepare(
+      `SELECT token, mobile_number, expires_at, used_at FROM bank_invites WHERE token = ?`
+    )
+      .bind(token)
+      .first<{ token: string; mobile_number: string; expires_at: string; used_at: string | null }>();
+    if (!inv) return c.json({ error: "Invalid or expired link" }, 404);
+    if (inv.used_at) return c.json({ error: "This link was already used", used: true }, 410);
+    if (new Date(inv.expires_at).getTime() < Date.now()) return c.json({ error: "This link has expired", expired: true }, 410);
+
+    const bank = await c.env.DB.prepare(
+      `SELECT account_name, bank_name, account_number FROM customer_bank_details WHERE mobile_number = ?`
+    )
+      .bind(inv.mobile_number)
+      .first<any>();
+
+    const mob = inv.mobile_number;
+    const masked = mob.length > 4 ? mob.slice(0, 3) + "****" + mob.slice(-2) : "****";
+
+    return c.json({
+      ok: true,
+      mobileMasked: masked,
+      hasBank: !!bank,
+      bankHint: bank ? { account_name: bank.account_name, bank_name: bank.bank_name, account_number: maskAccount(bank.account_number) } : null,
+      expiresAt: inv.expires_at,
+    });
+  });
+
+  app.post("/api/public/bank-invite", async (c) => {
+    const body = await c.req.json<{
+      token?: string;
+      accountName?: string;
+      accountNumber?: string;
+      bankName?: string;
+      branchName?: string;
+    }>().catch(() => ({} as any));
+
+    const token = String(body.token || "").trim();
+    if (!token) return c.json({ error: "token required" }, 400);
+
+    await ensureBankInvitesTable(c.env.DB);
+    const inv = await c.env.DB.prepare(
+      `SELECT token, mobile_number, expires_at, used_at FROM bank_invites WHERE token = ?`
+    )
+      .bind(token)
+      .first<{ token: string; mobile_number: string; expires_at: string; used_at: string | null }>();
+    if (!inv) return c.json({ error: "Invalid or expired link" }, 404);
+    if (inv.used_at) return c.json({ error: "This link was already used" }, 410);
+    if (new Date(inv.expires_at).getTime() < Date.now()) return c.json({ error: "This link has expired" }, 410);
+
+    const accountName = String(body.accountName || "").trim();
+    const accountNumber = String(body.accountNumber || "").trim();
+    const bankName = String(body.bankName || "").trim();
+    const branchName = String(body.branchName || "").trim() || null;
+    if (!accountName || !accountNumber || !bankName) {
+      return c.json({ error: "Account name, account number, and bank name are required" }, 400);
+    }
+
+    const taken = await c.env.DB.prepare(
+      `SELECT mobile_number FROM customer_bank_details WHERE account_number = ? AND mobile_number != ? LIMIT 1`
+    )
+      .bind(accountNumber, inv.mobile_number)
+      .first();
+    if (taken) {
+      return c.json({ error: "This bank account is already registered to another mobile number." }, 409);
+    }
+
+    await c.env.DB.prepare(`INSERT OR IGNORE INTO wallets (mobile_number) VALUES (?)`).bind(inv.mobile_number).run();
+    await c.env.DB.prepare(
+      `INSERT INTO customer_bank_details (mobile_number, account_name, account_number, bank_name, branch_name)
+       VALUES (?,?,?,?,?)
+       ON CONFLICT(mobile_number) DO UPDATE SET
+         account_name = excluded.account_name, account_number = excluded.account_number,
+         bank_name = excluded.bank_name, branch_name = excluded.branch_name, updated_at = datetime('now')`
+    )
+      .bind(inv.mobile_number, accountName, accountNumber, bankName, branchName)
+      .run();
+
+    await c.env.DB.prepare(`UPDATE bank_invites SET used_at = datetime('now') WHERE token = ?`).bind(token).run();
+
+    // Try to create/refresh payout if over threshold
+    try {
+      await syncPayout(c.env, inv.mobile_number);
+    } catch { /* non-fatal */ }
+
+    return c.json({ ok: true, message: "Bank details saved. Finance can now process your payout." });
+  });
+
+
+
   // ---------- Admin: payout threshold (LKR) ----------
   app.get("/api/admin/payout-threshold", async (c) => {
     const session = await adminSession(c);

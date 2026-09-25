@@ -1547,6 +1547,31 @@ async function deleteCustomer(id) {
 let cachedSummariesData = [];
 let summariesFilter = "ALL";
 
+
+async function shareBankInviteAdmin(mobile) {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/bank-invite`, {
+      method: "POST", headers: authHeaders(), body: JSON.stringify({ mobile })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Could not create invite");
+    const base = (window.CLAIM_PORTAL_URL || "").replace(/\/$/, "");
+    if (!base) throw new Error("Set CLAIM_PORTAL_URL in admin/config.js");
+    const url = base + (data.path || `/bank.html?token=${data.token}`);
+    let d = String(mobile || "").replace(/\D/g, "");
+    if (d.startsWith("0") && d.length >= 9) d = "94" + d.slice(1);
+    const text = `CanTec Rewards: please add your bank account for payout using this secure link (valid 7 days):\n${url}`;
+    const choice = prompt(`Bank details link for ${mobile}:\n\n${url}\n\nOK = copy link\\nType WA = open WhatsApp`, "OK");
+    if (choice === null) return;
+    if (String(choice).trim().toUpperCase() === "WA") {
+      window.open(d ? `https://wa.me/${d}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+      return;
+    }
+    try { await navigator.clipboard.writeText(url); alert("Link copied.\\n\\n" + url); }
+    catch { prompt("Copy this link:", url); }
+  } catch (e) { alert(e.message || String(e)); }
+}
+
 async function loadCustomerSummaries() {
   const container = document.getElementById("view-summaries");
   container.innerHTML = `<div style="padding:60px 0;text-align:center;color:var(--text-muted);">Loading 360° customer ledger and reward summaries…</div>`;
@@ -1607,6 +1632,7 @@ function renderSummariesView(data) {
             <div style="font-size:0.72rem;color:var(--text-muted);">${c.bank_name || ''}</div>
           ` : `
             <span class="chip chip-warning"><span class="chip-dot"></span>No Bank</span>
+            <div style="margin-top:6px;"><button class="btn btn-primary btn-sm" onclick="shareBankInviteAdmin('${c.mobile_number || c.mobile || ''}')">Request bank details</button></div>
           `}
         </td>
         <td>
@@ -1618,8 +1644,9 @@ function renderSummariesView(data) {
             <span class="chip chip-muted"><span class="chip-dot"></span>Accumulating</span>
           `}
         </td>
-        <td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">View Profile</button>
+          ${!c.has_bank && (c.mobile_number || c.mobile) ? `<button class="btn btn-primary btn-sm" onclick="shareBankInviteAdmin('${c.mobile_number || c.mobile}')">Request bank</button>` : ''}
         </td>
       </tr>
     `;
@@ -1746,6 +1773,7 @@ function filterSummariesLive() {
           <span class="chip chip-success"><span class="chip-dot"></span>Bank Saved</span>
         ` : `
           <span class="chip chip-warning"><span class="chip-dot"></span>No Bank</span>
+          <div style="margin-top:6px;"><button class="btn btn-primary btn-sm" onclick="shareBankInviteAdmin('${c.mobile_number || c.mobile || ''}')">Request bank details</button></div>
         `}
       </td>
       <td>
@@ -1834,6 +1862,7 @@ function renderPayoutsView(data) {
             <div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${p.account_number}</div>
           ` : `
             <span class="chip chip-warning"><span class="chip-dot"></span>No Bank Saved</span>
+            <div style="margin-top:6px;"><button class="btn btn-primary btn-sm" onclick="shareBankInviteAdmin('${p.mobile_number}')">Request bank details</button></div>
           `}
         </td>
         <td>
@@ -1866,8 +1895,9 @@ function renderPayoutsView(data) {
       </td>
       <td>${e.has_bank ? '<span class="chip chip-success"><span class="chip-dot"></span>Registered</span>' : '<span class="chip chip-warning"><span class="chip-dot"></span>Missing</span>'}</td>
       <td>${e.pending_payouts ? `<span class="chip chip-warning"><span class="chip-dot"></span>In Batch (${e.pending_payouts})</span>` : '<span class="chip chip-success">Ready to Batch</span>'}</td>
-      <td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${e.mobile_number}')">View Profile</button>
+        ${!e.has_bank ? `<button class="btn btn-primary btn-sm" onclick="shareBankInviteAdmin('${e.mobile_number}')">Request bank details</button>` : ''}
       </td>
     </tr>
   `).join("");

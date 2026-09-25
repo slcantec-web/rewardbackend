@@ -1,10 +1,14 @@
-Customer master Excel — location optional, set GPS later
-========================================================
+Bank-details invite link (copy / WhatsApp)
+==========================================
 
-- Bulk Excel upload no longer needs GPS/location columns filled.
-- Download "Excel template" from Customers tab (location column blank).
-- After import, use "Set GPS" / "Edit GPS" on each customer row.
-- Paste Google Maps link OR lat,lng (e.g. 6.9271, 79.8612).
-- Type CLEAR in the GPS prompt to remove coordinates.
+When a customer is payout-eligible but has no bank details:
+  Finance or Admin can click "Request bank details"
+  → generates a 7-day secure link on the claim portal
+  → Copy to clipboard, or type WA to open WhatsApp with message
 
-Overwrite: admin/index.html, src/extras.ts
+Customer opens:
+  https://rewards.cloudebase.dpdns.org/bank.html?token=...
+
+Requires CLAIM_PORTAL_URL in admin/config.js (already set).
+
+New file: public/bank.html
