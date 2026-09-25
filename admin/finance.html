@@ -814,7 +814,8 @@ function renderReview(data) {
             </span>
           </div>
 
-          ${isPending ? `
+          ${isPending ? (
+            (role === "finance_staff" || role === "finance_lead") ? `
             <div style="display:flex;gap:10px;">
               <button class="btn btn-success" style="flex:1;padding:12px;" onclick="approveSubmission('${s.id}')">
                 ✓ Approve Claim &amp; Credit Wallet
@@ -823,7 +824,13 @@ function renderReview(data) {
                 ✕ Reject Claim
               </button>
             </div>
-          ` : `
+            ` : `
+            <div style="padding:12px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;font-size:0.85rem;color:#92400e;line-height:1.45;">
+              <strong>Admin view only.</strong> Approve and reject are for Finance staff.
+              Open this queue with a finance account to process claims.
+            </div>
+            `
+          ) : `
             <div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:10px;background:#f8fafc;border-radius:8px;margin-bottom:10px;">
               This claim has already been <b>${s.status}</b> by ${s.reviewed_by || 'reviewer'} on ${s.reviewed_at ? new Date(s.reviewed_at).toLocaleDateString() : '—'}.
             </div>
@@ -874,6 +881,14 @@ function recalcTotalReward() {
 }
 
 async function approveSubmission(id) {
+  if (role === "admin") {
+    alert("Admin cannot approve bills.\n\nOnly Finance staff or Finance Lead can approve claims. Sign in with a finance account to process approvals.");
+    return;
+  }
+  if (role !== "finance_staff" && role !== "finance_lead") {
+    alert("You are not allowed to approve claims. Only Finance staff or Finance Lead can approve.");
+    return;
+  }
   // First persist quantity adjustments if any
   const items = [];
   document.querySelectorAll(".verified-qty-input").forEach(inp => {
@@ -885,14 +900,19 @@ async function approveSubmission(id) {
 
   try {
     if (items.length) {
-      await fetch(`${API_BASE}/api/finance/submissions/${id}/verify`, {
+      const vRes = await fetch(`${API_BASE}/api/finance/submissions/${id}/verify`, {
         method: "POST", headers: authHeaders(), body: JSON.stringify({ items })
       });
+      if (!vRes.ok) {
+        const vData = await vRes.json().catch(() => ({}));
+        alert(vData.error || "Could not save verified quantities.");
+        return;
+      }
     }
     const res = await fetch(`${API_BASE}/api/finance/submissions/${id}/approve`, {
       method: "POST", headers: authHeaders()
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) { alert(data.error || "Approval failed."); return; }
     alert(`Claim ${id} approved! LKR ${data.totalApproved} credited to customer wallet.`);
     loadQueue();
@@ -903,18 +923,27 @@ async function approveSubmission(id) {
 }
 
 async function promptRejectSubmission(id) {
+  if (role === "admin") {
+    alert("Admin cannot reject bills.\n\nOnly Finance staff or Finance Lead can reject claims. Sign in with a finance account to process rejections.");
+    return;
+  }
+  if (role !== "finance_staff" && role !== "finance_lead") {
+    alert("You are not allowed to reject claims. Only Finance staff or Finance Lead can reject.");
+    return;
+  }
   const code = prompt("Reason code for rejection (e.g. BLURRY_IMAGE, INVALID_DEALER, UNVERIFIED_ITEMS, DUPLICATE_BILL):", "INVALID_BILL");
   if (!code) return;
   try {
     const res = await fetch(`${API_BASE}/api/finance/submissions/${id}/reject`, {
       method: "POST", headers: authHeaders(), body: JSON.stringify({ rejectionCode: code })
     });
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       alert(`Claim ${id} marked as REJECTED.`);
       loadQueue();
       selectSubmission(id);
     } else {
-      alert("Failed to reject claim.");
+      alert(data.error || "Failed to reject claim.");
     }
   } catch (err) {
     alert("Error: " + err.message);

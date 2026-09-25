@@ -1,17 +1,15 @@
-CanTec Rewards — Admin/Finance login fix (deploy Admin Pages only)
+CanTec Rewards — Admin cannot reject bills (clear notify)
 
-WHAT CHANGED
-- Common staff login: admin/login.html (one page for Admin + Finance)
-- Sign-out from Finance Review Queue fully clears session → returns to login
-- Admin/Finance pages redirect to login.html if not signed in
-- Role after login: admin → index.html | finance_staff / finance_lead → finance.html
+WHAT CHANGED (admin/finance.html only for this fix)
+- Admin no longer sees Approve / Reject buttons on pending claims
+- Yellow notice: "Admin view only — Finance staff process claims"
+- If reject/approve is still triggered as admin → clear alert (not silent fail)
+- API error messages shown in the alert (e.g. "Only Finance staff can reject…")
 
-UPLOAD (Cloudflare Pages — Admin project, build output = admin folder)
-  admin/login.html   ← NEW (common login)
-  admin/index.html   ← updated
-  admin/finance.html ← updated
-  admin/config.js    ← include if you replace whole admin/
+Backend already returned 403 for admin reject/approve — UI was failing silently.
 
-Worker + Claim Portal (public/) — NOT required for this fix.
+UPLOAD: Cloudflare Pages → Admin project → admin/finance.html
+(Worker not required for this fix)
 
-After deploy: open https://YOUR-ADMIN-DOMAIN/login.html
+Also includes previous login fix files if you need a full admin refresh:
+  admin/login.html, admin/index.html, admin/config.js
