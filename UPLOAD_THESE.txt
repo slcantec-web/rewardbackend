@@ -1,29 +1,28 @@
-UPLOAD-READY — configs filled with your live URLs
-=================================================
+FLASH-LOOP FIX + live URLs
+==========================
 
-URLs configured:
-  Worker API:     https://customereward.slcantec.workers.dev
-  Claim portal:   https://rewards.cloudebase.dpdns.org   (public)
-  Admin portal:   https://admin.cloudebase.dpdns.org     (admin + finance)
+Root cause of admin "flashing / refresh loop":
+  On API 401 the page did location.reload() but left the bad token in
+  localStorage → reload picked it up again → infinite flash.
 
-Copy these paths into your GitHub repo root (overwrite):
+Fix:
+  admin/index.html + admin/finance.html now call clearSessionAndReload()
+  which removes adminToken / financeToken from localStorage before reload.
 
-  public/config.js
-  public/app.js
-  public/index.html
-  public/track.html
+URLs already filled:
+  Worker:  https://customereward.slcantec.workers.dev
+  Claim:   https://rewards.cloudebase.dpdns.org
+  Admin:   https://admin.cloudebase.dpdns.org
 
-  admin/config.js
-  admin/index.html
-  admin/finance.html
-
+Overwrite in repo:
+  public/config.js, public/app.js, public/index.html, public/track.html
+  admin/config.js, admin/index.html, admin/finance.html
   src/index.ts
 
-  README.md   (optional)
+After push: hard-refresh admin (Ctrl+Shift+R) or clear site data once
+so any old invalid token is gone. You should land on the login screen
+instead of a loop.
 
-No other edits needed. Push → Cloudflare redeploys both Pages + Worker.
-
-Pages projects:
-  - Claim  → root/build output = public
-  - Admin  → root/build output = admin
-  - Worker → from wrangler.toml / src/
+Worker secrets required (Cloudflare dashboard → Worker → Settings → Variables):
+  ADMIN_JWT_SECRET
+  FINANCE_JWT_SECRET

@@ -1049,6 +1049,17 @@ function authHeaders() {
   return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
+function clearSessionAndReload() {
+  token = null;
+  localStorage.removeItem("adminToken");
+  localStorage.removeItem("adminUsername");
+  localStorage.removeItem("financeToken");
+  localStorage.removeItem("financeRole");
+  localStorage.removeItem("financeUsername");
+  location.reload();
+}
+
+
 function showApp() {
   document.getElementById("loginOverlay").style.display = "none";
   document.getElementById("app").style.display = "block";
@@ -1116,7 +1127,7 @@ async function loadOverview() {
 
   try {
     const res = await fetch(`${API_BASE}/api/top-customers?limit=15`, { headers: authHeaders() });
-    if (res.status === 401) { token = null; location.reload(); return; }
+    if (res.status === 401) { clearSessionAndReload(); return; }
     const data = await res.json();
     const customers = data.customers || [];
     const stats = data.stats || {};
@@ -1261,7 +1272,7 @@ async function loadCustomers() {
 
   try {
     const res = await fetch(`${API_BASE}/api/admin/dealers`, { headers: authHeaders() });
-    if (res.status === 401) { token = null; location.reload(); return; }
+    if (res.status === 401) { clearSessionAndReload(); return; }
     const data = await res.json();
     cachedDealers = data.dealers || [];
     renderCustomersTable(cachedDealers);
@@ -1478,7 +1489,7 @@ async function loadCustomerSummaries() {
 
   try {
     const res = await fetch(`${API_BASE}/api/admin/customer-summaries?limit=500`, { headers: authHeaders() });
-    if (res.status === 401) { token = null; location.reload(); return; }
+    if (res.status === 401) { clearSessionAndReload(); return; }
     const data = await res.json();
     cachedSummariesData = data.customers || [];
     renderSummariesView(data);
@@ -1719,7 +1730,7 @@ async function loadPayouts() {
 
   try {
     const res = await fetch(`${API_BASE}/api/admin/payouts?status=${currentPayoutsFilter}`, { headers: authHeaders() });
-    if (res.status === 401) { token = null; location.reload(); return; }
+    if (res.status === 401) { clearSessionAndReload(); return; }
     const data = await res.json();
     cachedPayoutsData = data;
     renderPayoutsView(data);
@@ -1984,7 +1995,7 @@ async function loadItems() {
 
   try {
     const res = await fetch(`${API_BASE}/api/admin/products`, { headers: authHeaders() });
-    if (res.status === 401) { token = null; location.reload(); return; }
+    if (res.status === 401) { clearSessionAndReload(); return; }
     const data = await res.json();
     cachedProducts = data.products || [];
     renderItemsTable(cachedProducts);
@@ -2189,7 +2200,7 @@ async function loadStaff() {
 
   try {
     const res = await fetch(`${API_BASE}/api/admin/staff`, { headers: authHeaders() });
-    if (res.status === 401) { token = null; location.reload(); return; }
+    if (res.status === 401) { clearSessionAndReload(); return; }
     const data = await res.json();
     const staff = data.staff || [];
 

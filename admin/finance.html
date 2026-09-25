@@ -591,6 +591,17 @@ function authHeaders() {
   return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
+function clearSessionAndReload() {
+  token = null;
+  localStorage.removeItem("financeToken");
+  localStorage.removeItem("financeRole");
+  localStorage.removeItem("financeUsername");
+  localStorage.removeItem("adminToken");
+  localStorage.removeItem("adminUsername");
+  location.reload();
+}
+
+
 function showApp() {
   document.getElementById("loginOverlay").style.display = "none";
   document.getElementById("app").style.display = "flex";
@@ -636,7 +647,7 @@ function showPayoutsView() {
 async function loadQueue() {
   try {
     const res = await fetch(`${API_BASE}/api/finance/submissions?status=${queueFilter}`, { headers: authHeaders() });
-    if (res.status === 401) { token = null; location.reload(); return; }
+    if (res.status === 401) { clearSessionAndReload(); return; }
     const data = await res.json();
     cachedSubmissions = data.submissions || [];
     renderQueueList(cachedSubmissions);
