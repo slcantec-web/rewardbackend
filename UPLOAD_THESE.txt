@@ -1,6 +1,7 @@
-Finance-only bill approval
-==========================
-Approve / reject / verify qty: finance_staff + finance_lead only.
-Admin tokens receive 403 on those endpoints.
+Finance Lead can override approved/rejected claim status
+========================================================
+- finance_lead only: Reopen → Pending, Set → Approved, Set → Rejected
+- Admin and finance_staff cannot (API 403)
+- Wallet auto-adjusted + payouts refreshed
 
-Redeploy Worker (src/extras.ts + src/index.ts).
+Redeploy Worker + Admin/Finance Pages.

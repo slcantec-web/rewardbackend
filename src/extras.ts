@@ -37,6 +37,13 @@ async function financeStaffOnly(c: any) {
   return null;
 }
 
+/** Status override on already approved/rejected bills — Finance Lead only */
+async function financeLeadOnly(c: any) {
+  const sf = await sessionFrom(c, c.env.FINANCE_JWT_SECRET);
+  if (sf && sf.role === "finance_lead") return sf;
+  return null;
+}
+
 async function financeSession(c: any, roles: Role[]) {
   // Check finance secret first
   const sf = await sessionFrom(c, c.env.FINANCE_JWT_SECRET);
@@ -675,6 +682,118 @@ export function registerExtras(app: App) {
     return c.json({ ok: true, totalApproved });
   });
 
+  // ---------- Finance Lead only: change status of APPROVED / REJECTED bills ----------
+  app.post("/api/finance/submissions/:id/status", async (c) => {
+    const session = await financeLeadOnly(c);
+    if (!session) {
+      return c.json({
+        error: "Only Finance Lead can change status of approved or rejected bills. Admin and Finance officers cannot.",
+      }, 403);
+    }
+
+    const id = c.req.param("id");
+    const body = await c.req.json<{ status?: string; rejectionCode?: string }>().catch(() => ({} as any));
+    const newStatus = String(body.status || "").toUpperCase();
+    if (!["PENDING", "APPROVED", "REJECTED", "IN_REVIEW"].includes(newStatus)) {
+      return c.json({ error: "status must be PENDING, IN_REVIEW, APPROVED, or REJECTED" }, 400);
+    }
+
+    const sub = await c.env.DB.prepare(
+      `SELECT id, mobile_number, status, total_approved_reward_lkr FROM submissions WHERE id = ?`
+    )
+      .bind(id)
+      .first<{ id: string; mobile_number: string; status: string; total_approved_reward_lkr: number | null }>();
+    if (!sub) return c.json({ error: "Not found" }, 404);
+
+    const prev = sub.status;
+    if (prev === newStatus) return c.json({ ok: true, status: newStatus, unchanged: true });
+
+    // Only allow override when current status is already final (or lead reopening)
+    if (!["APPROVED", "REJECTED", "PENDING", "IN_REVIEW"].includes(prev)) {
+      return c.json({ error: `Cannot change status from ${prev}` }, 400);
+    }
+
+    const prevApproved = Number(sub.total_approved_reward_lkr || 0);
+
+    // If leaving APPROVED, reverse the wallet credit that was applied for this claim
+    if (prev === "APPROVED" && newStatus !== "APPROVED" && prevApproved > 0) {
+      await c.env.DB.prepare(
+        `UPDATE wallets SET balance_lkr = max(0, balance_lkr - ?), updated_at = datetime('now') WHERE mobile_number = ?`
+      )
+        .bind(prevApproved, sub.mobile_number)
+        .run();
+    }
+
+    let totalApproved = 0;
+    if (newStatus === "APPROVED") {
+      const totalRow = await c.env.DB.prepare(
+        `SELECT COALESCE(SUM(line_reward_lkr), 0) AS total FROM submission_items WHERE submission_id = ?`
+      )
+        .bind(id)
+        .first<{ total: number }>();
+      totalApproved = totalRow?.total ?? 0;
+
+      // Credit only the delta if was already approved with different amount, or full if not previously approved
+      if (prev !== "APPROVED") {
+        await c.env.DB.prepare(
+          `INSERT INTO wallets (mobile_number, balance_lkr) VALUES (?, ?)
+           ON CONFLICT(mobile_number) DO UPDATE SET balance_lkr = balance_lkr + excluded.balance_lkr, updated_at = datetime('now')`
+        )
+          .bind(sub.mobile_number, totalApproved)
+          .run();
+      } else if (totalApproved !== prevApproved) {
+        const delta = totalApproved - prevApproved;
+        await c.env.DB.prepare(
+          `UPDATE wallets SET balance_lkr = max(0, balance_lkr + ?), updated_at = datetime('now') WHERE mobile_number = ?`
+        )
+          .bind(delta, sub.mobile_number)
+          .run();
+      }
+
+      await c.env.DB.prepare(
+        `UPDATE submissions SET status = 'APPROVED', total_approved_reward_lkr = ?, rejection_code = NULL,
+         reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?`
+      )
+        .bind(totalApproved, session.sub, id)
+        .run();
+    } else if (newStatus === "REJECTED") {
+      const code = String(body.rejectionCode || "LEAD_OVERRIDE").trim() || "LEAD_OVERRIDE";
+      await c.env.DB.prepare(
+        `UPDATE submissions SET status = 'REJECTED', rejection_code = ?, total_approved_reward_lkr = 0,
+         reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?`
+      )
+        .bind(code, session.sub, id)
+        .run();
+    } else {
+      // PENDING or IN_REVIEW — reopen for finance queue
+      await c.env.DB.prepare(
+        `UPDATE submissions SET status = ?, rejection_code = NULL, total_approved_reward_lkr = 0,
+         reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?`
+      )
+        .bind(newStatus, session.sub, id)
+        .run();
+    }
+
+    try {
+      await syncPayout(c.env, sub.mobile_number);
+      await rebuildWalletsFromApprovals(c.env);
+      await syncAllPayouts(c.env);
+    } catch { /* non-fatal */ }
+
+    await c.env.DB.prepare(
+      `INSERT INTO finance_audit_trail (actor, submission_id, action, details_json) VALUES (?,?,?,?)`
+    )
+      .bind(
+        session.sub,
+        id,
+        "STATUS_OVERRIDE",
+        JSON.stringify({ from: prev, to: newStatus, rejectionCode: body.rejectionCode || null, totalApproved })
+      )
+      .run();
+
+    return c.json({ ok: true, from: prev, status: newStatus, totalApproved });
+  });
+
   // ---------- Payouts (Finance Lead + Admin + read-only for Staff) ----------
 
   async function handleGetPayouts(c: any) {
@@ -794,7 +913,7 @@ export function registerExtras(app: App) {
          WHERE id = ? AND status = 'PENDING'`
       ).bind(erpReference, bankReference, session.sub, id),
       c.env.DB.prepare(
-        `UPDATE wallets SET balance_lkr = MAX(0, balance_lkr - ?), status = 'ACTIVE', updated_at = datetime('now') WHERE mobile_number = ?`
+        `UPDATE wallets SET balance_lkr = max(0, balance_lkr - ?), status = 'ACTIVE', updated_at = datetime('now') WHERE mobile_number = ?`
       ).bind(payout.amount_lkr, payout.mobile_number),
     ]);
     await syncPayout(c.env, payout.mobile_number);
@@ -1083,7 +1202,7 @@ export function registerExtras(app: App) {
          WHERE id = ? AND status = 'PENDING'`
       ).bind(erpReference, bankReference, session.sub, id),
       c.env.DB.prepare(
-        `UPDATE wallets SET balance_lkr = MAX(0, balance_lkr - ?), status = 'ACTIVE', updated_at = datetime('now') WHERE mobile_number = ?`
+        `UPDATE wallets SET balance_lkr = max(0, balance_lkr - ?), status = 'ACTIVE', updated_at = datetime('now') WHERE mobile_number = ?`
       ).bind(payout.amount_lkr, payout.mobile_number),
     ]);
     await syncPayout(c.env, payout.mobile_number); // leftover balance may still be over threshold
