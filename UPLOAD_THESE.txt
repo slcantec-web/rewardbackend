@@ -1,1 +1,1 @@
-Admin summaries: End customers vs Dealers separate; bank invite only for end customers.
+FIX: /api/finance/queue?status=ALL returns all submissions (was filtering status='ALL'). Redeploy Worker.

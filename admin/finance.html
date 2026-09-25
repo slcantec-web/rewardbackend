@@ -682,8 +682,9 @@ function renderQueueList(list) {
           <span class="queue-item-amt">LKR ${(s.total_claimed_reward_lkr || 0).toFixed(0)}</span>
         </div>
         <div class="queue-item-meta">${s.dealer_name || "Direct Customer"} · ${s.mobile_number}</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
           <span style="font-size:0.75rem;color:var(--text-subtle);">${new Date(s.created_at_server).toLocaleDateString()}</span>
+          <span class="status-chip chip-muted" style="font-size:0.7rem;">${s.status || ''}</span>
           <span class="status-chip ${chip}">Risk ${risk}</span>
         </div>
       </div>

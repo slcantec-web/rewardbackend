@@ -567,35 +567,62 @@ export function registerExtras(app: App) {
 
   app.get("/api/finance/queue", async (c) => {
     if (!(await financeSession(c, ["finance_staff", "finance_lead"]))) return c.json({ error: "Unauthorized" }, 401);
-    const status = c.req.query("status") || "PENDING";
-    const { results } = await c.env.DB.prepare(
-      `SELECT s.id, s.mobile_number, s.dealer_id, d.name AS dealer_name, s.status, s.risk_score, s.fraud_flags,
-              s.created_at_server, s.total_claimed_reward_lkr,
+    const status = (c.req.query("status") || "PENDING").toUpperCase();
+
+    const baseSelect = `SELECT s.id, s.mobile_number, s.dealer_id, d.name AS dealer_name, s.status, s.risk_score, s.fraud_flags,
+              s.created_at_server, s.total_claimed_reward_lkr, s.total_approved_reward_lkr,
               (SELECT COUNT(*) FROM submissions x WHERE x.device_fingerprint_hash = s.device_fingerprint_hash) AS device_submissions,
               (SELECT COUNT(DISTINCT x.mobile_number) FROM submissions x WHERE x.device_fingerprint_hash = s.device_fingerprint_hash) AS device_mobiles
-       FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id
-       WHERE s.status = ? ORDER BY s.created_at_server ASC LIMIT 50`
-    )
-      .bind(status)
-      .all();
-    return c.json({ submissions: results });
+       FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id`;
+
+    let results: any[] = [];
+    if (status === "ALL") {
+      const r = await c.env.DB.prepare(
+        `${baseSelect} ORDER BY s.created_at_server DESC LIMIT 200`
+      ).all();
+      results = (r as any).results || [];
+    } else if (status === "PENDING") {
+      // Include IN_REVIEW with pending work queue
+      const r = await c.env.DB.prepare(
+        `${baseSelect} WHERE s.status IN ('PENDING', 'IN_REVIEW') ORDER BY s.created_at_server ASC LIMIT 100`
+      ).all();
+      results = (r as any).results || [];
+    } else {
+      const r = await c.env.DB.prepare(
+        `${baseSelect} WHERE s.status = ? ORDER BY s.created_at_server DESC LIMIT 100`
+      )
+        .bind(status)
+        .all();
+      results = (r as any).results || [];
+    }
+    return c.json({ submissions: results, filter: status, count: results.length });
   });
 
-  // Alias used by older finance UI builds
+  // Alias used by older finance UI builds — same logic as /queue
   app.get("/api/finance/submissions", async (c) => {
     if (!(await financeSession(c, ["finance_staff", "finance_lead"]))) return c.json({ error: "Unauthorized" }, 401);
-    const status = c.req.query("status") || "PENDING";
-    const { results } = await c.env.DB.prepare(
-      `SELECT s.id, s.mobile_number, s.dealer_id, d.name AS dealer_name, s.status, s.risk_score, s.fraud_flags,
-              s.created_at_server, s.total_claimed_reward_lkr,
+    const status = (c.req.query("status") || "PENDING").toUpperCase();
+    const baseSelect = `SELECT s.id, s.mobile_number, s.dealer_id, d.name AS dealer_name, s.status, s.risk_score, s.fraud_flags,
+              s.created_at_server, s.total_claimed_reward_lkr, s.total_approved_reward_lkr,
               (SELECT COUNT(*) FROM submissions x WHERE x.device_fingerprint_hash = s.device_fingerprint_hash) AS device_submissions,
               (SELECT COUNT(DISTINCT x.mobile_number) FROM submissions x WHERE x.device_fingerprint_hash = s.device_fingerprint_hash) AS device_mobiles
-       FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id
-       WHERE s.status = ? ORDER BY s.created_at_server ASC LIMIT 50`
-    )
-      .bind(status)
-      .all();
-    return c.json({ submissions: results });
+       FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id`;
+    let results: any[] = [];
+    if (status === "ALL") {
+      const r = await c.env.DB.prepare(`${baseSelect} ORDER BY s.created_at_server DESC LIMIT 200`).all();
+      results = (r as any).results || [];
+    } else if (status === "PENDING") {
+      const r = await c.env.DB.prepare(
+        `${baseSelect} WHERE s.status IN ('PENDING', 'IN_REVIEW') ORDER BY s.created_at_server ASC LIMIT 100`
+      ).all();
+      results = (r as any).results || [];
+    } else {
+      const r = await c.env.DB.prepare(`${baseSelect} WHERE s.status = ? ORDER BY s.created_at_server DESC LIMIT 100`)
+        .bind(status)
+        .all();
+      results = (r as any).results || [];
+    }
+    return c.json({ submissions: results, filter: status, count: results.length });
   });
 
   app.get("/api/finance/submissions/:id", async (c) => {
