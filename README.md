@@ -83,22 +83,28 @@ Then set secrets under **Settings → Variables and Secrets**:
 
 No build command needed for either — they're static files.
 
-### 6. Connect Pages to the Worker
+### 6. Connect Pages to the Worker (2-domain layout)
 
-`public/config.js` and `admin/config.js` resolve the API base automatically:
+This project is designed for **two Pages projects** + one Worker (original Cloudflare deploy):
 
-- **Same custom domain (recommended):** if you own a zone in Cloudflare
-  (e.g. `rewards.company.com`), point both Pages projects at it via
-  **Custom domains**, then add a **Worker Route** for
-  `rewards.company.com/api/*` pointing at the Worker. Routes take priority
-  over Pages on the same zone, so `/api/*` hits the Worker and everything
-  else serves the static PWA — same-origin, no CORS, no config needed.
-  `config.js` returns `""` (relative paths) in this setup.
-- **Still on `*.pages.dev` / `*.workers.dev`:** open `public/config.js` and
-  `admin/config.js` and set `WORKER_URL` to your deployed Worker's
-  `https://reward-system-api.<subdomain>.workers.dev` URL. Requests route
-  there automatically; the Worker's CORS middleware already allows
-  cross-origin calls.
+| Project | Build output | Role |
+|---------|--------------|------|
+| Claim portal | `public` | Customer submission + track |
+| Admin / Finance | `admin` | Admin panel + finance review |
+| Worker | `src/` via `wrangler.toml` | `/api/*` |
+
+`public/config.js` and `admin/config.js`:
+
+1. Set **`WORKER_URL`** in both files to your Worker URL  
+   (e.g. `https://customereward.<account>.workers.dev`) when API is on a different origin.
+2. In **`admin/config.js`**, set **`CLAIM_PORTAL_URL`** to the customer Pages URL  
+   (e.g. `https://your-claim.pages.dev`) so “Claim Portal ↗” works.
+3. In **`public/config.js`**, optionally set **`ADMIN_PORTAL_URL`** to the admin Pages URL  
+   if you want footer staff links on the claim page.
+
+Leave a value as `""` only when that resource is same-origin (Worker Route on the same hostname, or local `server.ts`).
+
+CORS on the Worker already allows cross-origin API calls from the two Pages hosts.
 
 ### 7. Seed the first admin account
 

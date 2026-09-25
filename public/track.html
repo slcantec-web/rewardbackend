@@ -138,16 +138,27 @@
 <p style="text-align:center;margin-top:16px;">
   <a style="color:var(--primary);font-size:0.88rem;font-weight:600;text-decoration:none;" href="/">← Submit another purchase claim</a>
 </p>
-<p style="text-align:center;margin-top:10px;font-size:0.8rem;">
-  <a href="/admin/index.html" style="color:var(--muted);text-decoration:none;">Admin Console</a> &nbsp;•&nbsp; <a href="/finance.html" style="color:var(--muted);text-decoration:none;">Finance Review</a>
+<p style="text-align:center;margin-top:10px;font-size:0.8rem;" id="staffLinks" hidden>
+  <a id="linkAdminConsole" href="#" style="color:var(--muted);text-decoration:none;">Admin Console</a> &nbsp;•&nbsp; <a id="linkFinanceReview" href="#" style="color:var(--muted);text-decoration:none;">Finance Review</a>
 </p>
 
 </div>
 
-<script src="/config.js"></script>
+<script src="config.js"></script>
 <script>
 let lastMobile = null;
 let lastSubmissionId = null;
+
+(function wireStaffLinks() {
+  const adminBase = (window.ADMIN_PORTAL_URL || "").replace(/\/$/, "");
+  if (!adminBase) return;
+  const staff = document.getElementById("staffLinks");
+  if (staff) staff.hidden = false;
+  const a = document.getElementById("linkAdminConsole");
+  const f = document.getElementById("linkFinanceReview");
+  if (a) a.href = adminBase + "/index.html";
+  if (f) f.href = adminBase + "/finance.html";
+})();
 
 document.getElementById("trackBtn").addEventListener("click", async () => {
   const mobile = document.getElementById("mobileInput").value.trim();

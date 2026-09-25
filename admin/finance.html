@@ -474,7 +474,7 @@
   <!-- Enterprise Header -->
   <header class="enterprise-nav">
     <div class="nav-inner">
-      <a href="/admin/finance.html" class="brand">
+      <a href="finance.html" class="brand">
         <div class="brand-icon">C</div>
         <div class="brand-name">
           CanTec Rewards
@@ -483,10 +483,11 @@
       </a>
 
       <div class="portal-switch">
-        <a href="/admin/index.html" class="portal-link">← Admin Panel</a>
+        <a href="index.html" class="portal-link">← Admin Panel</a>
         <a href="#" id="navQueue" class="portal-link active">Review Queue</a>
         <a href="#" id="navCustomers" class="portal-link">Customer Summaries</a>
         <a href="#" id="navPayouts" class="portal-link">Payout Ledger</a>
+        <a href="#" target="_blank" class="portal-link" id="linkClaimPortal">Claim Portal ↗</a>
       </div>
 
       <div class="nav-spacer"></div>
@@ -530,7 +531,7 @@
   </div>
 </div>
 
-<script src="/config.js"></script>
+<script src="config.js"></script>
 <script>
 const API_BASE = window.API_BASE || "";
 let token = localStorage.getItem("financeToken") || localStorage.getItem("adminToken") || null;
@@ -539,6 +540,14 @@ let username = localStorage.getItem("financeUsername") || localStorage.getItem("
 let currentId = null;
 let queueFilter = "PENDING";
 let cachedSubmissions = [];
+
+// 2-domain: Claim Portal on separate customer Pages project
+(function wireClaimPortalLink() {
+  const el = document.getElementById("linkClaimPortal");
+  if (!el) return;
+  const base = (window.CLAIM_PORTAL_URL || "").replace(/\/$/, "");
+  el.href = base ? base + "/" : "/";
+})();
 
 document.getElementById("loginBtn").addEventListener("click", async () => {
   const u = document.getElementById("username").value.trim();
@@ -751,7 +760,7 @@ function renderReview(data) {
           </div>
         </div>
 
-        <!-- Fraud Telemetry -->
+        <!-- Fraud Telemetry + Exact GPS -->
         <div class="panel">
           <div class="panel-title">🛡️ Fraud Prevention Telemetry</div>
           <div class="detail-row">
@@ -768,6 +777,29 @@ function renderReview(data) {
             <span class="detail-label">Hardware Device Fingerprint</span>
             <span class="detail-val mono">${(s.device_fingerprint_hash || '—').slice(0, 16)}...</span>
           </div>
+          <div class="detail-row">
+            <span class="detail-label">Exact GPS (submit location)</span>
+            <span class="detail-val mono">
+              ${s.gps_lat != null && s.gps_lng != null
+                ? `${Number(s.gps_lat).toFixed(6)}, ${Number(s.gps_lng).toFixed(6)}`
+                : '<span style="color:var(--danger);">Missing</span>'}
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">GPS Accuracy</span>
+            <span class="detail-val mono">${s.gps_accuracy_m != null ? `±${Math.round(s.gps_accuracy_m)} m` : '—'}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Distance from Dealer</span>
+            <span class="detail-val mono">${s.dealer_distance_km != null ? Number(s.dealer_distance_km).toFixed(2) + ' km' : '—'}</span>
+          </div>
+          ${s.gps_lat != null && s.gps_lng != null ? `
+          <div class="detail-row">
+            <span class="detail-label">Map</span>
+            <span class="detail-val">
+              <a href="https://www.google.com/maps?q=${s.gps_lat},${s.gps_lng}" target="_blank" rel="noopener" style="color:var(--primary);font-weight:600;">Open in Google Maps ↗</a>
+            </span>
+          </div>` : ''}
         </div>
       </div>
 

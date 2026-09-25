@@ -772,7 +772,7 @@
   <!-- Enterprise Header -->
   <header class="top-header">
     <div class="nav-inner">
-      <a href="/admin/index.html" class="brand">
+      <a href="index.html" class="brand">
         <div class="brand-icon">C</div>
         <div class="brand-text">
           CanTec Rewards
@@ -780,11 +780,11 @@
         </div>
       </a>
 
-      <!-- Portal Navigation Switch -->
+      <!-- Portal Navigation Switch (2-domain: same Pages project for admin+finance; claim is separate) -->
       <div class="portal-switch">
-        <a href="/admin/index.html" class="portal-link active">Admin Console</a>
-        <a href="/admin/finance.html" class="portal-link" id="linkFinanceDashboard">Finance Queue →</a>
-        <a href="/" target="_blank" class="portal-link">Claim Portal ↗</a>
+        <a href="index.html" class="portal-link active">Admin Console</a>
+        <a href="finance.html" class="portal-link" id="linkFinanceDashboard">Finance Queue →</a>
+        <a href="#" target="_blank" class="portal-link" id="linkClaimPortal">Claim Portal ↗</a>
       </div>
 
       <div class="nav-spacer"></div>
@@ -978,13 +978,21 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="/config.js"></script>
+<script src="config.js"></script>
 
 <script>
 const API_BASE = window.API_BASE || "";
 let token = localStorage.getItem("adminToken") || null;
 let currentUsername = localStorage.getItem("adminUsername") || "admin";
 let activePayoutId = null;
+
+// 2-domain: Claim Portal lives on the customer Pages project
+(function wireClaimPortalLink() {
+  const el = document.getElementById("linkClaimPortal");
+  if (!el) return;
+  const base = (window.CLAIM_PORTAL_URL || "").replace(/\/$/, "");
+  el.href = base ? base + "/" : "/";
+})();
 
 // Ensure token works seamlessly across Admin and Finance
 if (token) {

@@ -1,0 +1,34 @@
+UPLOAD-READY — 2-domain restore + PC block + GPS in finance
+============================================================
+
+Copy these paths into your GitHub repo root (overwrite existing):
+
+  public/config.js      ← set WORKER_URL + ADMIN_PORTAL_URL
+  public/app.js         ← mobile-only gate + GPS required
+  public/index.html     ← relative links + staff links via config
+  public/track.html     ← relative links + staff links via config
+
+  admin/config.js       ← set WORKER_URL + CLAIM_PORTAL_URL
+  admin/index.html      ← relative portal links + Claim Portal URL
+  admin/finance.html    ← relative links + exact GPS in review panel
+
+  src/index.ts          ← server-side DESKTOP_BLOCKED + location required
+
+  README.md             ← 2-domain deploy notes (optional)
+
+BEFORE PUSH — fill in your real URLs:
+
+  public/config.js:
+    WORKER_URL        = "https://YOUR-WORKER.workers.dev"
+    ADMIN_PORTAL_URL  = "https://YOUR-ADMIN.pages.dev"
+
+  admin/config.js:
+    WORKER_URL        = "https://YOUR-WORKER.workers.dev"
+    CLAIM_PORTAL_URL  = "https://YOUR-CLAIM.pages.dev"
+
+Cloudflare Pages:
+  - Claim portal project  → build output / root = public
+  - Admin/Finance project → build output / root = admin
+  - Worker                → from wrangler.toml / src/
+
+No new D1 migrations required.

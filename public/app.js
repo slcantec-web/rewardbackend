@@ -16,6 +16,43 @@ const quantities = {}; // productId -> qty
 const createdAtClient = new Date().toISOString();
 
 // ============================================================
+// Mobile-only gate — block desktop / PC submissions
+// ============================================================
+function isMobileDevice() {
+  const ua = navigator.userAgent || "";
+  const mobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(ua);
+  const touch = (navigator.maxTouchPoints || 0) > 0;
+  const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  // Prefer real phones/tablets; reject obvious desktop UA even with touch screens
+  const desktopUa = /Windows NT|Macintosh|Linux x86_64|CrOS/i.test(ua) && !/Android|Mobile|iPhone|iPad/i.test(ua);
+  if (desktopUa) return false;
+  return mobileUa || (touch && coarse);
+}
+
+function blockIfDesktop() {
+  if (isMobileDevice()) return false;
+  const banner = document.getElementById("resultBanner");
+  if (banner) {
+    banner.style.display = "block";
+    banner.className = "result-banner err";
+    banner.innerHTML =
+      "⚠️ Claims must be submitted from a <b>mobile phone</b> at the dealer location.<br>" +
+      "Desktop / PC browsers are blocked for fraud prevention. Please open this page on your phone.";
+  }
+  const btn = document.getElementById("submitBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Mobile device required";
+  }
+  const gps = document.getElementById("gpsStatus");
+  if (gps) {
+    gps.textContent = "Blocked — use a mobile phone";
+    gps.className = "status-err";
+  }
+  return true;
+}
+
+// ============================================================
 // Device blueprint capture
 // ============================================================
 function captureDeviceBlueprint() {
@@ -40,6 +77,8 @@ function captureDeviceBlueprint() {
     userAgent: navigator.userAgent,
     platform: navigator.platform,
     language: navigator.language,
+    maxTouchPoints: navigator.maxTouchPoints || 0,
+    isMobile: isMobileDevice(),
     screen: {
       width: screen.width,
       height: screen.height,
@@ -59,6 +98,19 @@ function captureDeviceBlueprint() {
 // ============================================================
 async function init() {
   document.getElementById("timeStatus").textContent = new Date().toLocaleString();
+
+  // Wire staff links only when ADMIN_PORTAL_URL is configured (2-domain)
+  const adminBase = (window.ADMIN_PORTAL_URL || "").replace(/\/$/, "");
+  if (adminBase) {
+    const staff = document.getElementById("staffLinks");
+    if (staff) staff.hidden = false;
+    const a = document.getElementById("linkAdminConsole");
+    const f = document.getElementById("linkFinanceReview");
+    if (a) a.href = adminBase + "/index.html";
+    if (f) f.href = adminBase + "/finance.html";
+  }
+
+  if (blockIfDesktop()) return;
 
   requestLocation();
   await loadProducts();
@@ -181,13 +233,30 @@ function compressImage(file, maxDim, quality) {
 }
 
 function validateForm() {
+  if (!isMobileDevice()) {
+    document.getElementById("submitBtn").disabled = true;
+    return;
+  }
   const hasQty = Object.values(quantities).some((q) => q > 0);
   const hasMobile = document.getElementById("mobileInput").value.trim().length >= 9;
-  const ready = !!(selectedDealerId && hasQty && billBase64 && gpsData && hasMobile);
+  const hasGps = !!(gpsData && gpsData.lat != null && gpsData.lng != null);
+  const ready = !!(selectedDealerId && hasQty && billBase64 && hasGps && hasMobile);
   document.getElementById("submitBtn").disabled = !ready;
 }
 
 async function submitClaim() {
+  if (!isMobileDevice()) {
+    blockIfDesktop();
+    return;
+  }
+  if (!gpsData || gpsData.lat == null || gpsData.lng == null) {
+    const banner = document.getElementById("resultBanner");
+    banner.style.display = "block";
+    banner.className = "result-banner err";
+    banner.innerHTML = "⚠️ Location access is required. Allow GPS permission and try again.";
+    return;
+  }
+
   const btn = document.getElementById("submitBtn");
   btn.disabled = true;
   btn.textContent = "Submitting…";
@@ -220,7 +289,8 @@ async function submitClaim() {
       banner.innerHTML = `✅ Claim submitted! Your tracking ID is <b>${data.submissionId}</b>.<br>Save it to check your status.`;
     } else {
       banner.className = "result-banner err";
-      banner.innerHTML = `⚠️ Claim could not be accepted (${(data.flags || []).join(", ") || "see support"}).`;
+      const msg = data.error || (data.flags || []).join(", ") || "see support";
+      banner.innerHTML = `⚠️ Claim could not be accepted (${msg}).`;
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (e) {

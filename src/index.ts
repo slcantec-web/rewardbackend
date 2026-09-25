@@ -84,6 +84,25 @@ app.post("/api/submissions", async (c) => {
     return c.json({ error: "Location permission is required to submit a claim" }, 400);
   }
 
+  // Block desktop / PC submissions — claims must be from a mobile device at the dealer
+  const device = payload.device || {};
+  const ua = String(device.userAgent || "");
+  const platform = String(device.platform || "");
+  const mobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(ua);
+  const desktopUa =
+    (/Windows NT|Macintosh|Linux x86_64|CrOS/i.test(ua) || /Win32|Win64|MacIntel|Linux x86_64/i.test(platform)) &&
+    !/Android|Mobile|iPhone|iPad/i.test(ua);
+  const clientSaysMobile = device.isMobile === true;
+  if (desktopUa || (!mobileUa && !clientSaysMobile)) {
+    return c.json(
+      {
+        error: "Claims must be submitted from a mobile phone at the dealer location. Desktop / PC browsers are blocked.",
+        flags: ["DESKTOP_BLOCKED"],
+      },
+      403
+    );
+  }
+
   const submissionId = genSubmissionId();
   const nowIso = new Date().toISOString();
 
