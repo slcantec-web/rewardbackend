@@ -1318,7 +1318,7 @@ function renderCustomersTable(dealers) {
       </div>
       <div class="page-header-actions">
         <button class="btn btn-primary" onclick="openAddCustomerModal()">+ Add New Customer</button>
-        <button class="btn btn-outline" onclick="downloadCustomerTemplate()">📄 Excel template</button>
+        <button class="btn btn-outline" onclick="downloadCustomerTemplate()" title="Download sample file with correct columns">📄 Download sample Excel</button>
         <label class="btn btn-secondary" style="cursor:pointer;">
           📥 Bulk Upload Excel (.xlsx)
           <input type="file" id="custExcelInput" accept=".xlsx,.xls,.csv" style="display:none;" />
@@ -1327,8 +1327,9 @@ function renderCustomersTable(dealers) {
     </div>
 
     <div class="banner" style="background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;margin-bottom:14px;padding:12px 14px;border-radius:8px;font-size:0.85rem;">
-      <b>Bulk upload tip:</b> Location / GPS is <b>optional</b>. Upload name, code, phone, city, address first.
-      Set Google Maps link or coordinates later with <b>Set GPS</b> on each row (geofencing is not required for import).
+      <b>Bulk upload:</b> First click <b>Download sample Excel</b>, fill your rows using the same column headers, then use <b>Bulk Upload Excel</b>.
+      Required column: <b>name</b>. Optional: customerCode, contactPhone, city, address, location.
+      <b>location / GPS is optional</b> — leave blank and use <b>Set GPS</b> later per customer.
     </div>
 
     <!-- Search & Filter Bar -->
@@ -1516,22 +1517,55 @@ async function setCustomerGps(dealer) {
 }
 
 function downloadCustomerTemplate() {
-  // Location column optional — leave blank; set GPS later in Admin
-  const rows = [
-    { customerCode: "C001", name: "Example Hardware Store", contactPhone: "0771234567", city: "Colombo", address: "142 Main Street", location: "" },
-    { customerCode: "C002", name: "Second Shop (no GPS yet)", contactPhone: "0779876543", city: "Kandy", address: "", location: "" },
+  // Exact headers expected by bulk upload parser (keep first row as headers)
+  const headers = ["customerCode", "name", "contactPhone", "city", "address", "location"];
+  const sampleRows = [
+    ["C001", "Example Hardware Store", "0771234567", "Colombo", "142 Main Street, Pettah", ""],
+    ["C002", "Kandy Builders Mart", "0779876543", "Kandy", "12 Peradeniya Road", ""],
+    ["C003", "Galle City Hardware", "0712345678", "Galle", "", "6.0535, 80.2210"],
   ];
+
   if (typeof XLSX === "undefined") {
-    // CSV fallback
-    const header = "customerCode,name,contactPhone,city,address,location";
-    const lines = rows.map(r => [r.customerCode, r.name, r.contactPhone, r.city, r.address, r.location].map(v => `"${v}"`).join(","));
-    downloadFile(header + "\n" + lines.join("\n"), "customer_master_template.csv", "text/csv");
+    const lines = [headers.join(",")].concat(
+      sampleRows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    );
+    downloadFile(lines.join("\n"), "customer_master_sample.csv", "text/csv;charset=utf-8");
+    alert("Sample CSV downloaded.\\n\\nKeep the header row exactly as-is.\\nOnly the name column is required.\\nLeave location blank if you will Set GPS later.");
     return;
   }
-  const ws = XLSX.utils.json_to_sheet(rows);
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Customers");
-  XLSX.writeFile(wb, "customer_master_template.xlsx");
+
+  // Sheet 1: sample data with correct headers
+  const dataAoa = [headers, ...sampleRows];
+  const wsData = XLSX.utils.aoa_to_sheet(dataAoa);
+  wsData["!cols"] = [
+    { wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 28 }, { wch: 22 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsData, "Customers");
+
+  // Sheet 2: instructions
+  const instructions = [
+    ["Column", "Required?", "Description", "Example"],
+    ["customerCode", "No", "Your ERP / internal customer code (unique). Used to update the same row on re-upload.", "C001"],
+    ["name", "YES", "Customer or dealer / store display name", "Example Hardware Store"],
+    ["contactPhone", "No", "Store or contact mobile number", "0771234567"],
+    ["city", "No", "City or region", "Colombo"],
+    ["address", "No", "Street address", "142 Main Street"],
+    ["location", "No", "Optional GPS: Google Maps link OR latitude, longitude. Leave blank and use Set GPS in Admin later.", "6.9271, 79.8612"],
+    [],
+    ["How to upload"],
+    ["1. Keep the header row (row 1) exactly as in the Customers sheet."],
+    ["2. Replace sample rows with your real customers. Delete unused sample rows."],
+    ["3. Do not rename columns. Extra columns are ignored."],
+    ["4. Save as .xlsx and use Bulk Upload Excel on the Customers page."],
+    ["5. If location is blank, open the customer later and click Set GPS."],
+  ];
+  const wsHelp = XLSX.utils.aoa_to_sheet(instructions);
+  wsHelp["!cols"] = [{ wch: 16 }, { wch: 10 }, { wch: 70 }, { wch: 24 }];
+  XLSX.utils.book_append_sheet(wb, wsHelp, "Instructions");
+
+  XLSX.writeFile(wb, "customer_master_sample.xlsx");
 }
 
 async function deleteCustomer(id) {
