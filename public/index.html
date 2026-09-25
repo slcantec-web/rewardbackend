@@ -231,8 +231,9 @@
 
 <div class="card">
   <label for="mobileInput">Your Contact Mobile Number</label>
-  <input type="tel" id="mobileInput" inputmode="numeric" pattern="[0-9\s+]*" autocomplete="tel" placeholder="e.g. 0771234567" />
-  <div style="font-size:0.75rem;color:var(--muted);margin-top:4px;">Used to disburse approved reward payouts directly to your account.</div>
+  <input type="tel" id="mobileInput" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="tel" placeholder="e.g. 0771234567" />
+  <div style="font-size:0.75rem;color:var(--muted);margin-top:4px;">Must be <b>exactly 10 digits</b> (e.g. 0771234567). Max <b>3 claims per day</b> per number.</div>
+  <div id="mobileHint" style="font-size:0.8rem;margin-top:6px;display:none;"></div>
 </div>
 
 <button class="submit-btn" id="submitBtn" disabled>Submit Claim &amp; Get Tracking ID</button>

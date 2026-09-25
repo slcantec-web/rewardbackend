@@ -1,21 +1,16 @@
-CanTec Rewards — Same phone + different contact number = block
+CanTec Rewards — 10-digit mobile + max 3 claims per day per number
 
-ACCURACY
-Yes — device blueprint is a practical way to catch one phone submitting under many mobiles.
-We also fixed an unstable canvas fingerprint (was using Math.random every load) and added a
-stable localStorage installId so the same browser stays linked reliably.
+RULES
+1) Mobile must be exactly 10 digits (e.g. 0771234567). 94… country code is normalized.
+2) Same contact number: maximum 3 submissions per calendar day (Asia/Colombo).
 
-BEHAVIOUR
-- Same device fingerprint + different mobile than prior claims → claim blocked (HTTP 403)
-- Same device + same mobile (repeat claims) → allowed
-- Customer sees a clear red banner on the claim form (not a silent fail)
+CUSTOMER UI
+- Live hint under the mobile field
+- Submit blocked until valid 10-digit number
+- Clear banners for invalid mobile and daily limit
 
 UPLOAD
-1) Worker (src/):
-   - src/fraud.ts   (NEW in this package if missing on Worker)
-   - src/types.ts
-   - src/index.ts
-2) Claim Portal Pages (public/):
-   - public/app.js
+- Worker: src/index.ts
+- Claim portal: public/app.js, public/index.html
 
-Admin Pages — not required for this change.
+Admin Pages — not required.
