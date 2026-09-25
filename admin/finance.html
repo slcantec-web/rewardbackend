@@ -730,6 +730,9 @@ function renderReview(data) {
   const stats = cust.stats || {};
   const wallet = cust.wallet || {};
   const bank = cust.bank;
+  const device = data.device || {};
+  const dsum = device.summary || {};
+  const dact = device.activity || {};
   const isPending = s.status === "PENDING" || s.status === "IN_REVIEW";
 
   const itemRows = items.map(i => `
@@ -787,7 +790,23 @@ function renderReview(data) {
           </div>
           <div class="detail-row">
             <span class="detail-label">Hardware Device Fingerprint</span>
-            <span class="detail-val mono">${(s.device_fingerprint_hash || '—').slice(0, 16)}...</span>
+            <span class="detail-val mono">${(device.fingerprint || s.device_fingerprint_hash || '—').toString().slice(0, 20)}…</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Mobile device blueprint</span>
+            <span class="detail-val">
+              <b>${dsum.label || '—'}</b><br>
+              <span style="font-size:0.78rem;color:var(--text-muted);">
+                ${[dsum.os, dsum.osVersion, dsum.browser, dsum.model].filter(Boolean).join(' · ') || '—'}
+                ${dsum.screen ? ' · Screen ' + dsum.screen : ''}
+                ${dsum.cores != null ? ' · ' + dsum.cores + ' cores' : ''}
+                ${dsum.memoryGb != null ? ' · ' + dsum.memoryGb + ' GB' : ''}
+                ${dsum.network ? ' · ' + dsum.network : ''}
+                ${dsum.platform ? ' · ' + dsum.platform : ''}
+              </span>
+              ${dsum.gpu ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;" class="mono">GPU: ${dsum.gpu}</div>` : ''}
+              ${dact.total != null ? `<div style="font-size:0.75rem;margin-top:4px;">Device history: <b>${dact.total}</b> claims · <b>${dact.mobiles ?? 0}</b> mobiles · class <b>${dact.cls || '—'}</b></div>` : ''}
+            </span>
           </div>
           <div class="detail-row">
             <span class="detail-label">Exact GPS (submit location)</span>

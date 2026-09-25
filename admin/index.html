@@ -2143,12 +2143,36 @@ async function loadRates() {
       </tr>
     `).join("");
 
+    // Load current payout threshold
+    let threshold = 1000;
+    try {
+      const thRes = await fetch(`${API_BASE}/api/admin/payout-threshold`, { headers: authHeaders() });
+      if (thRes.ok) {
+        const thData = await thRes.json();
+        threshold = Number(thData.threshold) || 1000;
+      }
+    } catch {}
+
     container.innerHTML = `
       <div class="page-header">
         <div class="page-header-info">
           <h1>Product Reward &amp; Payout Rates</h1>
-          <p>Configure LKR compensation values credited to claimants per verified product unit.</p>
+          <p>Configure LKR compensation values and the wallet payout threshold (when a customer becomes eligible for payout).</p>
         </div>
+      </div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">Wallet payout threshold</div>
+        <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:12px;">
+          When a customer's approved reward balance (by mobile number) reaches or exceeds this amount, a <b>PENDING payout</b> appears for Finance to bind and pay.
+        </p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <label style="font-weight:600;font-size:0.85rem;">Threshold (LKR)</label>
+          <input type="number" id="payoutThresholdInput" min="0" step="1" value="${threshold}" style="width:160px;" />
+          <button class="btn btn-primary btn-sm" onclick="savePayoutThreshold()">Save threshold</button>
+          <span id="thresholdSaveMsg" style="font-size:0.82rem;color:var(--text-muted);"></span>
+        </div>
+        <div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted);">Current: <b class="mono">LKR ${Number(threshold).toLocaleString()}</b></div>
       </div>
 
       <div class="card">
@@ -2171,6 +2195,24 @@ async function loadRates() {
     `;
   } catch (err) {
     container.innerHTML = `<div class="banner err">${err.message}</div>`;
+  }
+}
+
+async function savePayoutThreshold() {
+  const input = document.getElementById("payoutThresholdInput");
+  const msg = document.getElementById("thresholdSaveMsg");
+  const n = parseFloat(input && input.value);
+  if (isNaN(n) || n < 0) { alert("Enter a valid threshold (LKR ≥ 0)."); return; }
+  if (msg) msg.textContent = "Saving…";
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/payout-threshold`, {
+      method: "POST", headers: authHeaders(), body: JSON.stringify({ threshold: n })
+    });
+    const data = await res.json();
+    if (!res.ok) { if (msg) msg.textContent = data.error || "Failed"; return; }
+    if (msg) msg.textContent = `Saved — LKR ${Number(data.threshold).toLocaleString()}. Wallets/payouts refreshed.`;
+  } catch (e) {
+    if (msg) msg.textContent = "Network error";
   }
 }
 

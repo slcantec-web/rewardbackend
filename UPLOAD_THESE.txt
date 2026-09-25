@@ -1,21 +1,18 @@
-Security + bank binding update
-==============================
+Payout threshold + track summary + device blueprint
+===================================================
 
-Changes:
-1. Admin login: removed demo credentials (admin/admin123) and empty username/password fields
-2. Public claim + track pages: removed Admin Console / Finance Review links
-3. Bank details: one mobile ↔ one bank account (mandatory for payout)
-   - customer_bank_details.mobile_number is PRIMARY KEY (already)
-   - same account number cannot be used on a different mobile
-   - after claim submit, customer is directed to Track page to add bank
+1) Admin → Rates tab: adjust "Wallet payout threshold" (default 1000 LKR).
+   When a mobile's approved wallet balance reaches this, a PENDING payout appears.
 
-Customer bank flow:
-  1. Submit claim on claim portal with contact mobile
-  2. Open Track page with mobile + Submission ID
-  3. Enter bank account (name, number, bank, branch)
-  4. Saved permanently against that mobile — Finance uses it for payout bind
+2) Public: Submit claim + Track claims links on both pages.
+
+3) Track page: after lookup, shows summary of ALL claims under that mobile
+   (counts, approved/pending/rejected, LKR totals, list of submission IDs).
+
+4) Finance review: full mobile device blueprint on every submission
+   (OS, browser, model, screen, GPU, cores, device history class).
 
 Overwrite:
-  public/app.js, public/index.html, public/track.html
-  admin/index.html
-  src/extras.ts
+  public/index.html, public/track.html, public/app.js
+  admin/index.html, admin/finance.html
+  src/index.ts, src/extras.ts

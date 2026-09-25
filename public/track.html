@@ -122,7 +122,7 @@
 
 <div class="card">
   <h1>Track Your Claim</h1>
-  <p class="muted" style="margin-bottom:14px;">Enter your contact mobile number and assigned submission ID to view live verification status and wallet balance.</p>
+  <p class="muted" style="margin-bottom:14px;">Enter your contact mobile and any submission ID for that mobile to view claim status, wallet balance, and a summary of all claims under the same number.</p>
   
   <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;text-transform:uppercase;">Registered Mobile</label>
   <input type="text" id="mobileInput" placeholder="e.g. 077 123 4567" />
@@ -135,8 +135,9 @@
 
 <div id="resultCard" style="display:none;"></div>
 
-<p style="text-align:center;margin-top:16px;">
-  <a style="color:var(--primary);font-size:0.88rem;font-weight:600;text-decoration:none;" href="/">← Submit another purchase claim</a>
+<p style="text-align:center;margin-top:16px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+  <a style="color:var(--primary);font-size:0.88rem;font-weight:600;text-decoration:none;" href="index.html">← Submit a claim</a>
+  <a style="color:var(--primary);font-size:0.88rem;font-weight:600;text-decoration:none;" href="track.html">Track claims →</a>
 </p>
 
 
@@ -175,13 +176,26 @@ document.getElementById("trackBtn").addEventListener("click", async () => {
       </div>`
     ).join("");
 
-    const threshold = 1000;
-    const pct = Math.min(100, Math.round((data.wallet.balance_lkr / threshold) * 100));
+    const threshold = Number(data.threshold) || 1000;
+    const bal = Number(data.wallet?.balance_lkr || 0);
+    const pct = Math.min(100, Math.round((bal / threshold) * 100));
+    const summary = data.summary || {};
+    const allSubs = data.allSubmissions || [];
+
+    const allRows = allSubs.map((x) => `
+      <div class="item-row">
+        <span class="mono">${x.id}</span>
+        <span>
+          <span class="status-badge status-${x.status}">${String(x.status || "").replace("_"," ")}</span>
+          · LKR ${Number(x.total_approved_reward_lkr || x.total_claimed_reward_lkr || 0).toFixed(2)}
+        </span>
+      </div>
+    `).join("") || `<div class="muted">No claims found.</div>`;
 
     resultCard.innerHTML = `
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <span class="muted">Submission ID</span>
+          <span class="muted">This submission</span>
           <span class="status-badge status-${s.status}">${s.status.replace("_"," ")}</span>
         </div>
         <div class="mono" style="font-size:1.1rem;font-weight:700;">${s.id}</div>
@@ -194,14 +208,27 @@ document.getElementById("trackBtn").addEventListener("click", async () => {
       </div>
 
       <div class="card">
+        <div class="muted" style="font-weight:600;text-transform:uppercase;margin-bottom:8px;">All claims for this mobile</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;font-size:0.85rem;">
+          <div>Total claims: <b>${summary.total ?? allSubs.length}</b></div>
+          <div>Approved: <b>${summary.approved ?? 0}</b></div>
+          <div>Pending: <b>${summary.pending ?? 0}</b></div>
+          <div>Rejected: <b>${summary.rejected ?? 0}</b></div>
+          <div>Approved LKR: <b class="mono">${Number(summary.approvedLkr || 0).toFixed(2)}</b></div>
+          <div>Claimed LKR: <b class="mono">${Number(summary.claimedLkr || 0).toFixed(2)}</b></div>
+        </div>
+        ${allRows}
+      </div>
+
+      <div class="card">
         <div class="muted" style="font-weight:600;text-transform:uppercase;">Reward Wallet Balance</div>
         <div class="mono" style="font-size:1.5rem;font-weight:800;color:var(--primary);margin-top:2px;">
-          LKR ${data.wallet.balance_lkr.toFixed(2)}
+          LKR ${bal.toFixed(2)}
         </div>
         <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
         <div class="muted" style="margin-top:6px;display:flex;justify-content:space-between;">
-          <span>${pct}% of threshold</span>
-          <span>Target: LKR ${threshold.toLocaleString()}</span>
+          <span>${pct}% of payout threshold</span>
+          <span>Payout when ≥ LKR ${threshold.toLocaleString()}</span>
         </div>
       </div>
 

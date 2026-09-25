@@ -238,7 +238,42 @@ app.get("/api/track", async (c) => {
     .bind(mobile)
     .first<{ balance_lkr: number; status: string }>();
 
-  return c.json({ submission, items, wallet: wallet || { balance_lkr: 0, status: "ACTIVE" } });
+  // All claims under the same mobile (summary)
+  const { results: allSubmissions } = await c.env.DB.prepare(
+    `SELECT id, status, created_at_server, total_claimed_reward_lkr, total_approved_reward_lkr
+     FROM submissions WHERE mobile_number = ?
+     ORDER BY created_at_server DESC LIMIT 50`
+  )
+    .bind(mobile)
+    .all();
+
+  const summary = {
+    total: (allSubmissions || []).length,
+    pending: (allSubmissions || []).filter((x: any) => x.status === "PENDING" || x.status === "IN_REVIEW").length,
+    approved: (allSubmissions || []).filter((x: any) => x.status === "APPROVED").length,
+    rejected: (allSubmissions || []).filter((x: any) => x.status === "REJECTED").length,
+    approvedLkr: (allSubmissions || []).reduce((s: number, x: any) => s + Number(x.total_approved_reward_lkr || 0), 0),
+    claimedLkr: (allSubmissions || []).reduce((s: number, x: any) => s + Number(x.total_claimed_reward_lkr || 0), 0),
+  };
+
+  // Threshold for progress bar (best-effort; public endpoint — use env default)
+  let threshold = parseFloat(c.env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+  try {
+    const row = await c.env.DB.prepare(`SELECT value FROM system_settings WHERE key = 'payout_threshold_lkr'`).first<{ value: string }>();
+    if (row?.value != null) {
+      const n = parseFloat(row.value);
+      if (!isNaN(n) && n >= 0) threshold = n;
+    }
+  } catch { /* table may not exist yet */ }
+
+  return c.json({
+    submission,
+    items,
+    wallet: wallet || { balance_lkr: 0, status: "ACTIVE" },
+    allSubmissions: allSubmissions || [],
+    summary,
+    threshold,
+  });
 });
 
 // ============================================================

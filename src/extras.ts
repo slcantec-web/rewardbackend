@@ -64,6 +64,45 @@ function safeJson(text: unknown): any {
 }
 
 // ============================================================
+// Payout threshold (admin-adjustable via D1; env as default)
+// ============================================================
+
+async function ensureSettingsTable(db: D1Database) {
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`
+  ).run();
+}
+
+export async function getPayoutThreshold(env: Env): Promise<number> {
+  try {
+    await ensureSettingsTable(env.DB);
+    const row = await env.DB.prepare(`SELECT value FROM system_settings WHERE key = 'payout_threshold_lkr'`).first<{ value: string }>();
+    if (row?.value != null && row.value !== "") {
+      const n = parseFloat(row.value);
+      if (!isNaN(n) && n >= 0) return n;
+    }
+  } catch { /* fall through */ }
+  return parseFloat(env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+}
+
+export async function setPayoutThreshold(env: Env, amount: number): Promise<number> {
+  await ensureSettingsTable(env.DB);
+  await env.DB.prepare(
+    `INSERT INTO system_settings (key, value, updated_at) VALUES ('payout_threshold_lkr', ?, datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`
+  )
+    .bind(String(amount))
+    .run();
+  return amount;
+}
+
+
+
+// ============================================================
 // Device blueprint → readable summary
 // ============================================================
 
@@ -265,7 +304,7 @@ async function customerProfile(db: D1Database, mobileOrParam: string, fullBank: 
 // ============================================================
 
 async function syncPayout(env: Env, mobile: string) {
-  const threshold = parseFloat(env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+  const threshold = await getPayoutThreshold(env);
   const wallet = await env.DB.prepare(`SELECT balance_lkr FROM wallets WHERE mobile_number = ?`)
     .bind(mobile)
     .first<{ balance_lkr: number }>();
@@ -293,7 +332,7 @@ async function syncPayout(env: Env, mobile: string) {
  * Fixes historical data where claims were approved but wallets/payouts were never written.
  */
 async function rebuildWalletsFromApprovals(env: Env) {
-  const threshold = parseFloat(env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+  const threshold = await getPayoutThreshold(env);
 
   // Net balance per mobile = sum(approved rewards) - sum(paid payouts)
   const { results: rows } = await env.DB.prepare(
@@ -330,7 +369,7 @@ async function rebuildWalletsFromApprovals(env: Env) {
 
 /** Creates missing payouts for every wallet at/over threshold and refreshes pending amounts. */
 async function syncAllPayouts(env: Env) {
-  const threshold = parseFloat(env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+  const threshold = await getPayoutThreshold(env);
   const { results } = await env.DB.prepare(
     `SELECT w.mobile_number FROM wallets w
      WHERE w.balance_lkr >= ?
@@ -634,7 +673,7 @@ export function registerExtras(app: App) {
     if (!(await financeSession(c, ["finance_staff", "finance_lead"]))) return c.json({ error: "Unauthorized" }, 401);
 
     const status = (c.req.query("status") || "PENDING").toUpperCase();
-    const threshold = parseFloat(c.env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+    const threshold = await getPayoutThreshold(c.env);
     const doRebuild = c.req.query("rebuild") === "1";
 
     let rebuildStats: any = null;
@@ -769,7 +808,7 @@ export function registerExtras(app: App) {
   async function handleCustomerSummaries(c: any) {
     if (!(await financeSession(c, ["finance_staff", "finance_lead", "admin"]))) return c.json({ error: "Unauthorized" }, 401);
 
-    const threshold = parseFloat(c.env.WALLET_PAYOUT_THRESHOLD_LKR) || 1000;
+    const threshold = await getPayoutThreshold(c.env);
     const q = (c.req.query("q") || "").trim().toLowerCase();
     const sort = (c.req.query("sort") || "approved").toLowerCase();
     const limit = Math.min(500, Math.max(20, parseInt(c.req.query("limit") || "200", 10) || 200));
@@ -1113,6 +1152,30 @@ export function registerExtras(app: App) {
 
     return c.json({ ok: true, bound: true, message: "Bank account permanently linked to this mobile number." });
   });
+
+  // ---------- Admin: payout threshold (LKR) ----------
+  app.get("/api/admin/payout-threshold", async (c) => {
+    const session = await adminSession(c);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    const threshold = await getPayoutThreshold(c.env);
+    return c.json({ threshold });
+  });
+
+  app.post("/api/admin/payout-threshold", async (c) => {
+    const session = await adminSession(c);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    const body = await c.req.json<{ threshold?: number }>().catch(() => ({} as any));
+    const n = Number(body.threshold);
+    if (isNaN(n) || n < 0) return c.json({ error: "threshold must be a non-negative number" }, 400);
+    const threshold = await setPayoutThreshold(c.env, n);
+    // Refresh wallets + pending payouts against the new threshold
+    try {
+      await rebuildWalletsFromApprovals(c.env);
+      await syncAllPayouts(c.env);
+    } catch { /* non-fatal */ }
+    return c.json({ ok: true, threshold });
+  });
+
 
   // ---------- Admin: Customer (dealer) master with simple location input ----------
 
