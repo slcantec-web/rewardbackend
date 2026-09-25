@@ -22,3 +22,4 @@ Payouts still empty?
 2. Check "Approved LKR" and "Payout-eligible" columns
 3. If Approved LKR is 0 → claims were never Approved (only submitted)
 4. If green/eligible rows exist → open Payouts as finance_lead → "Rebuild from approved claims"
+test 1
