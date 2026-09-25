@@ -1,3 +1,2 @@
-Public dealer search: name, customer code, city, address
-=======================================================
-Redeploy Worker (src/index.ts) + Claim Pages (public/app.js, public/index.html)
+Mobile inputs use type=tel + inputmode=numeric for phone keypad.
+Redeploy Claim Pages (public/index.html, public/track.html).
