@@ -1083,13 +1083,24 @@ export function registerExtras(app: App) {
       .bind(b.mobile)
       .first<{ account_number: string }>();
 
-    // Blank account number on an update = keep the saved one (the customer only ever sees it masked).
+    // Blank account number on an update = keep the saved one (customer only ever sees it masked).
     const accountNumber = (b.accountNumber || "").trim() || existing?.account_number || "";
     if (!b.accountName?.trim() || !accountNumber || !b.bankName?.trim()) {
       return c.json({ error: "Account name, account number, and bank name are required" }, 400);
     }
 
+    // One mobile → one bank account (PK). Also block the same account number under a different mobile.
+    const taken = await c.env.DB.prepare(
+      `SELECT mobile_number FROM customer_bank_details WHERE account_number = ? AND mobile_number != ? LIMIT 1`
+    )
+      .bind(accountNumber, b.mobile)
+      .first<{ mobile_number: string }>();
+    if (taken) {
+      return c.json({ error: "This bank account is already registered to another mobile number. One bank account can only be linked to one mobile." }, 409);
+    }
+
     await c.env.DB.prepare(`INSERT OR IGNORE INTO wallets (mobile_number) VALUES (?)`).bind(b.mobile).run();
+    // UPSERT by mobile_number primary key — guarantees at most one bank row per mobile
     await c.env.DB.prepare(
       `INSERT INTO customer_bank_details (mobile_number, account_name, account_number, bank_name, branch_name)
        VALUES (?,?,?,?,?)
@@ -1100,7 +1111,7 @@ export function registerExtras(app: App) {
       .bind(b.mobile, b.accountName.trim(), accountNumber, b.bankName.trim(), b.branchName?.trim() || null)
       .run();
 
-    return c.json({ ok: true });
+    return c.json({ ok: true, bound: true, message: "Bank account permanently linked to this mobile number." });
   });
 
   // ---------- Admin: Customer (dealer) master with simple location input ----------

@@ -1,33 +1,21 @@
-FIX: Finance review queue + finance portal access
-================================================
+Security + bank binding update
+==============================
 
-Problems fixed:
-1. Review / audit queue was calling /api/finance/submissions (404).
-   Now uses /api/finance/queue (and server also has submissions alias).
-2. Finance portal was hard to find.
-   - Admin login page now has: "Finance staff? Open Finance Review Dashboard →"
-   - If a finance user tries Admin login, they get a direct link to finance.html
-3. Demo credentials (finance/finance123) are NOT in your live D1.
-   Use the finance users you created under Admin → Staff.
+Changes:
+1. Admin login: removed demo credentials (admin/admin123) and empty username/password fields
+2. Public claim + track pages: removed Admin Console / Finance Review links
+3. Bank details: one mobile ↔ one bank account (mandatory for payout)
+   - customer_bank_details.mobile_number is PRIMARY KEY (already)
+   - same account number cannot be used on a different mobile
+   - after claim submit, customer is directed to Track page to add bank
 
-Finance portal URL (bookmark this):
-  https://admin.cloudebase.dpdns.org/finance.html
+Customer bank flow:
+  1. Submit claim on claim portal with contact mobile
+  2. Open Track page with mobile + Submission ID
+  3. Enter bank account (name, number, bank, branch)
+  4. Saved permanently against that mobile — Finance uses it for payout bind
 
-Admin portal:
-  https://admin.cloudebase.dpdns.org/
-
-Overwrite in repo:
+Overwrite:
+  public/app.js, public/index.html, public/track.html
   admin/index.html
-  admin/finance.html
   src/extras.ts
-  (+ other files already in this zip if not yet deployed)
-
-After push:
-  1. Redeploy Admin Pages + Worker
-  2. Open https://admin.cloudebase.dpdns.org/finance.html
-  3. Sign in with one of your finance_staff / finance_lead usernames
-  4. Review queue should load
-
-Worker secrets (required for login tokens to work):
-  ADMIN_JWT_SECRET
-  FINANCE_JWT_SECRET

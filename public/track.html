@@ -138,9 +138,7 @@
 <p style="text-align:center;margin-top:16px;">
   <a style="color:var(--primary);font-size:0.88rem;font-weight:600;text-decoration:none;" href="/">← Submit another purchase claim</a>
 </p>
-<p style="text-align:center;margin-top:10px;font-size:0.8rem;" id="staffLinks" hidden>
-  <a id="linkAdminConsole" href="#" style="color:var(--muted);text-decoration:none;">Admin Console</a> &nbsp;•&nbsp; <a id="linkFinanceReview" href="#" style="color:var(--muted);text-decoration:none;">Finance Review</a>
-</p>
+
 
 </div>
 
@@ -148,17 +146,6 @@
 <script>
 let lastMobile = null;
 let lastSubmissionId = null;
-
-(function wireStaffLinks() {
-  const adminBase = (window.ADMIN_PORTAL_URL || "").replace(/\/$/, "");
-  if (!adminBase) return;
-  const staff = document.getElementById("staffLinks");
-  if (staff) staff.hidden = false;
-  const a = document.getElementById("linkAdminConsole");
-  const f = document.getElementById("linkFinanceReview");
-  if (a) a.href = adminBase + "/index.html";
-  if (f) f.href = adminBase + "/finance.html";
-})();
 
 document.getElementById("trackBtn").addEventListener("click", async () => {
   const mobile = document.getElementById("mobileInput").value.trim();
@@ -239,6 +226,7 @@ async function loadBankDetails() {
   bankCard.innerHTML = `
     <div class="card">
       <h3 style="font-size:1rem;font-weight:700;margin-bottom:8px;">Direct Bank Account Payout</h3>
+      <p class="muted" style="margin-bottom:10px;">Your contact mobile is permanently linked to <b>one</b> bank account. This is required before Finance can pay you.</p>
       ${has
         ? `<div class="banner-ok">✅ Your bank details are safely registered. Approved payouts will be transferred automatically.</div>
            <div class="muted">Registered details:</div>

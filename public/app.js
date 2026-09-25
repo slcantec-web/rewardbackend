@@ -99,16 +99,6 @@ function captureDeviceBlueprint() {
 async function init() {
   document.getElementById("timeStatus").textContent = new Date().toLocaleString();
 
-  // Wire staff links only when ADMIN_PORTAL_URL is configured (2-domain)
-  const adminBase = (window.ADMIN_PORTAL_URL || "").replace(/\/$/, "");
-  if (adminBase) {
-    const staff = document.getElementById("staffLinks");
-    if (staff) staff.hidden = false;
-    const a = document.getElementById("linkAdminConsole");
-    const f = document.getElementById("linkFinanceReview");
-    if (a) a.href = adminBase + "/index.html";
-    if (f) f.href = adminBase + "/finance.html";
-  }
 
   if (blockIfDesktop()) return;
 
@@ -286,7 +276,11 @@ async function submitClaim() {
     banner.style.display = "block";
     if (res.ok && data.status !== "REJECTED") {
       banner.className = "result-banner ok";
-      banner.innerHTML = `✅ Claim submitted! Your tracking ID is <b>${data.submissionId}</b>.<br>Save it to check your status.`;
+      const sid = data.submissionId || "";
+      banner.innerHTML =
+        `✅ Claim submitted! Your tracking ID is <b>${sid}</b>.<br>` +
+        `Next: open <a href="track.html" style="color:inherit;font-weight:700;text-decoration:underline;">Track your claim</a> ` +
+        `with this mobile + tracking ID and <b>add your bank account</b> (one mobile = one bank account, required for payout).`;
     } else {
       banner.className = "result-banner err";
       const msg = data.error || (data.flags || []).join(", ") || "see support";
