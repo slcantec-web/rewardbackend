@@ -183,7 +183,13 @@ async function loadDealers(query) {
   dealers = data.dealers || [];
   const select = document.getElementById("dealerSelect");
   select.innerHTML = `<option value="">Select a dealer...</option>` +
-    dealers.map((d) => `<option value="${d.id}">${d.name} — ${d.city || ""}</option>`).join("");
+    dealers.map((d) => {
+      const parts = [d.name];
+      if (d.customer_code) parts.push(`Code: ${d.customer_code}`);
+      if (d.city) parts.push(d.city);
+      else if (d.address) parts.push(d.address);
+      return `<option value="${d.id}">${parts.join(" — ")}</option>`;
+    }).join("");
 }
 
 function handleFileSelect(e) {

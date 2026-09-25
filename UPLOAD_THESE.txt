@@ -1,7 +1,3 @@
-Finance Lead can override approved/rejected claim status
-========================================================
-- finance_lead only: Reopen → Pending, Set → Approved, Set → Rejected
-- Admin and finance_staff cannot (API 403)
-- Wallet auto-adjusted + payouts refreshed
-
-Redeploy Worker + Admin/Finance Pages.
+Public dealer search: name, customer code, city, address
+=======================================================
+Redeploy Worker (src/index.ts) + Claim Pages (public/app.js, public/index.html)

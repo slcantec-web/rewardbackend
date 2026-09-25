@@ -60,11 +60,30 @@ app.get("/api/products", async (c) => {
 });
 
 app.get("/api/dealers", async (c) => {
-  const q = c.req.query("q") || "";
+  const q = (c.req.query("q") || "").trim();
+  const like = `%${q}%`;
+  // Search by name, customer code, city, or address/location text
   const { results } = await c.env.DB.prepare(
-    `SELECT id, name, city, latitude, longitude FROM dealers WHERE active = 1 AND name LIKE ? ORDER BY name LIMIT 20`
+    `SELECT id, customer_code, name, city, address, latitude, longitude
+     FROM dealers
+     WHERE active = 1
+       AND (
+         ? = ''
+         OR name LIKE ?
+         OR IFNULL(customer_code, '') LIKE ?
+         OR IFNULL(city, '') LIKE ?
+         OR IFNULL(address, '') LIKE ?
+       )
+     ORDER BY
+       CASE
+         WHEN ? != '' AND IFNULL(customer_code, '') = ? THEN 0
+         WHEN ? != '' AND name LIKE ? THEN 1
+         ELSE 2
+       END,
+       name
+     LIMIT 30`
   )
-    .bind(`%${q}%`)
+    .bind(q, like, like, like, like, q, q, q, `${q}%`)
     .all();
   return c.json({ dealers: results });
 });
