@@ -104,13 +104,9 @@ async function init() {
 
   requestLocation();
   await loadProducts();
-  await loadDealers("");
+  // dealer suggestions load as user types
 
-  document.getElementById("dealerSearch").addEventListener("input", (e) => loadDealers(e.target.value));
-  document.getElementById("dealerSelect").addEventListener("change", (e) => {
-    selectedDealerId = e.target.value;
-    validateForm();
-  });
+  setupDealerAutocomplete();
   document.getElementById("uploadBox").addEventListener("click", () => document.getElementById("billFileInput").click());
   document.getElementById("billFileInput").addEventListener("change", handleFileSelect);
   document.getElementById("mobileInput").addEventListener("input", validateForm);
@@ -177,19 +173,132 @@ function renderProducts() {
   });
 }
 
-async function loadDealers(query) {
-  const res = await fetch(`${API_BASE}/api/dealers?q=${encodeURIComponent(query)}`);
-  const data = await res.json();
-  dealers = data.dealers || [];
-  const select = document.getElementById("dealerSelect");
-  select.innerHTML = `<option value="">Select a dealer...</option>` +
-    dealers.map((d) => {
-      const parts = [d.name];
-      if (d.customer_code) parts.push(`Code: ${d.customer_code}`);
-      if (d.city) parts.push(d.city);
-      else if (d.address) parts.push(d.address);
-      return `<option value="${d.id}">${parts.join(" — ")}</option>`;
+let dealerSearchTimer = null;
+let dealerHighlight = -1;
+
+function setupDealerAutocomplete() {
+  const input = document.getElementById("dealerSearch");
+  const box = document.getElementById("dealerSuggestions");
+  const clearBtn = document.getElementById("dealerClearBtn");
+  if (!input || !box) return;
+
+  input.addEventListener("input", () => {
+    const q = input.value.trim();
+    dealerHighlight = -1;
+    if (selectedDealerId) {
+      // typing again clears selection
+      selectedDealerId = null;
+      document.getElementById("dealerSelected")?.classList.remove("visible");
+      validateForm();
+    }
+    clearTimeout(dealerSearchTimer);
+    if (q.length < 1) {
+      box.classList.remove("open");
+      box.innerHTML = "";
+      return;
+    }
+    box.innerHTML = `<div class="dealer-sug-empty">Searching…</div>`;
+    box.classList.add("open");
+    dealerSearchTimer = setTimeout(() => searchDealers(q), 220);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    const items = box.querySelectorAll(".dealer-sug-item");
+    if (!items.length || !box.classList.contains("open")) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      dealerHighlight = Math.min(items.length - 1, dealerHighlight + 1);
+      items.forEach((el, i) => el.classList.toggle("active", i === dealerHighlight));
+      items[dealerHighlight]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      dealerHighlight = Math.max(0, dealerHighlight - 1);
+      items.forEach((el, i) => el.classList.toggle("active", i === dealerHighlight));
+      items[dealerHighlight]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (dealerHighlight >= 0 && items[dealerHighlight]) items[dealerHighlight].click();
+    } else if (e.key === "Escape") {
+      box.classList.remove("open");
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".dealer-search-wrap")) box.classList.remove("open");
+  });
+
+  clearBtn?.addEventListener("click", () => {
+    selectedDealerId = null;
+    input.value = "";
+    input.focus();
+    document.getElementById("dealerSelected")?.classList.remove("visible");
+    box.classList.remove("open");
+    box.innerHTML = "";
+    validateForm();
+  });
+}
+
+async function searchDealers(query) {
+  const box = document.getElementById("dealerSuggestions");
+  if (!box) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/dealers?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    dealers = data.dealers || [];
+    if (!dealers.length) {
+      box.innerHTML = `<div class="dealer-sug-empty">No stores found for “${escapeHtml(query)}”</div>`;
+      box.classList.add("open");
+      return;
+    }
+    box.innerHTML = dealers.map((d, i) => {
+      const meta = [d.customer_code ? `Code: ${d.customer_code}` : null, d.city || d.address || null]
+        .filter(Boolean).join(" · ");
+      return `<div class="dealer-sug-item" role="option" data-idx="${i}" data-id="${escapeHtml(d.id)}">
+        <div class="dealer-sug-name">${escapeHtml(d.name || "")}</div>
+        ${meta ? `<div class="dealer-sug-meta">${escapeHtml(meta)}</div>` : ""}
+      </div>`;
     }).join("");
+    box.classList.add("open");
+    box.querySelectorAll(".dealer-sug-item").forEach((el) => {
+      el.addEventListener("click", () => selectDealerById(el.dataset.id));
+    });
+  } catch (err) {
+    box.innerHTML = `<div class="dealer-sug-empty">Search failed — check connection</div>`;
+    box.classList.add("open");
+  }
+}
+
+function selectDealerById(id) {
+  const d = dealers.find((x) => x.id === id);
+  if (!d) return;
+  selectedDealerId = d.id;
+  const input = document.getElementById("dealerSearch");
+  const box = document.getElementById("dealerSuggestions");
+  const sel = document.getElementById("dealerSelected");
+  const nameEl = document.getElementById("dealerSelectedName");
+  if (input) input.value = d.name + (d.customer_code ? ` (${d.customer_code})` : "");
+  if (box) { box.classList.remove("open"); box.innerHTML = ""; }
+  if (nameEl) {
+    const bits = [d.name];
+    if (d.customer_code) bits.push(d.customer_code);
+    if (d.city) bits.push(d.city);
+    nameEl.textContent = bits.join(" · ");
+  }
+  sel?.classList.add("visible");
+  validateForm();
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function loadDealers(query) {
+  // kept for compatibility — routes to autocomplete search
+  return searchDealers(query || "");
 }
 
 function handleFileSelect(e) {

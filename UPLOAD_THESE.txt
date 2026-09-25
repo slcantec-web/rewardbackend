@@ -1,2 +1,1 @@
-Mobile inputs use type=tel + inputmode=numeric for phone keypad.
-Redeploy Claim Pages (public/index.html, public/track.html).
+Dealer autocomplete suggestions under search box. Redeploy Claim Pages + Worker.

@@ -73,10 +73,10 @@
   .subtitle { color: var(--muted); font-size: 0.88rem; line-height: 1.4; }
   
   label { font-weight: 600; font-size: 0.82rem; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text); }
-  select, input[type=text] {
+  select, input[type=text], input[type=tel], input[type=search] {
     width: 100%; padding: 11px 13px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; font-family: inherit; outline: none; transition: border-color 0.15s;
   }
-  select:focus, input[type=text]:focus {
+  select:focus, input[type=text]:focus, input[type=tel]:focus, input[type=search]:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
   }
@@ -121,6 +121,51 @@
   .result-banner.ok { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
   .result-banner.err { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
   a.track-link { color: var(--primary); font-size: 0.88rem; font-weight: 600; text-decoration: none; }
+
+  /* Dealer autocomplete suggestions */
+  .dealer-search-wrap { position: relative; }
+  #dealerSuggestions {
+    display: none;
+    position: absolute;
+    left: 0; right: 0; top: calc(100% + 4px);
+    z-index: 50;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  #dealerSuggestions.open { display: block; }
+  .dealer-sug-item {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    text-align: left;
+  }
+  .dealer-sug-item:last-child { border-bottom: none; }
+  .dealer-sug-item:hover, .dealer-sug-item.active {
+    background: var(--primary-subtle);
+  }
+  .dealer-sug-name { font-weight: 700; font-size: 0.92rem; color: var(--text); }
+  .dealer-sug-meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+  .dealer-sug-empty { padding: 14px; font-size: 0.85rem; color: var(--muted); text-align: center; }
+  #dealerSelected {
+    display: none;
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--primary-subtle);
+    border: 1px solid var(--primary-border);
+    border-radius: 8px;
+    font-size: 0.88rem;
+  }
+  #dealerSelected.visible { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #dealerSelected .sel-name { font-weight: 700; color: var(--primary); }
+  #dealerSelected button {
+    border: none; background: transparent; color: var(--muted);
+    font-size: 0.8rem; font-weight: 600; cursor: pointer; text-decoration: underline;
+  }
+
 </style>
 </head>
 <body>
@@ -142,9 +187,16 @@
 
 <div class="card">
   <label for="dealerSearch">Hardware Store / Dealer</label>
-  <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;">Search by name, customer code, city, or address</div>
-  <input type="text" id="dealerSearch" placeholder="Search by store name, customer code, city, or address..." />
-  <select id="dealerSelect" style="margin-top:10px;"></select>
+  <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;">Type name, customer code, city, or address — pick from suggestions</div>
+  <div class="dealer-search-wrap">
+    <input type="search" id="dealerSearch" autocomplete="off" autocorrect="off" spellcheck="false"
+      placeholder="Start typing to search..." />
+    <div id="dealerSuggestions" role="listbox" aria-label="Dealer suggestions"></div>
+  </div>
+  <div id="dealerSelected">
+    <span>Selected: <span class="sel-name" id="dealerSelectedName"></span></span>
+    <button type="button" id="dealerClearBtn">Change</button>
+  </div>
 </div>
 
 <div class="card">
