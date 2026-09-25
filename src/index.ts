@@ -23,36 +23,6 @@ function genSubmissionId(): string {
   return `SUB-${year}-${rand}`;
 }
 
-/** Strip non-digits; normalize SL mobiles to 10 digits (07XXXXXXXX). */
-function normalizeMobileNumber(raw: string): string {
-  let d = String(raw || "").replace(/\D/g, "");
-  if (d.startsWith("94") && d.length >= 11) d = d.slice(2);
-  if (d.length === 9 && !d.startsWith("0")) d = "0" + d;
-  return d;
-}
-
-function isValidMobile10(raw: string): boolean {
-  const n = normalizeMobileNumber(raw);
-  return /^0\d{9}$/.test(n) && n.length === 10;
-}
-
-/** Asia/Colombo calendar-day bounds as ISO strings (UTC). */
-function colomboDayBoundsIso(now = new Date()): { start: string; end: string } {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Colombo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = fmt.formatToParts(now);
-  const y = parts.find((p) => p.type === "year")!.value;
-  const m = parts.find((p) => p.type === "month")!.value;
-  const d = parts.find((p) => p.type === "day")!.value;
-  const start = new Date(`${y}-${m}-${d}T00:00:00+05:30`);
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  return { start: start.toISOString(), end: end.toISOString() };
-}
-
 async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -133,45 +103,6 @@ app.post("/api/submissions", async (c) => {
     return c.json({ error: "Location permission is required to submit a claim" }, 400);
   }
 
-  // --- Mobile: must be exactly 10 digits ---
-  if (!isValidMobile10(payload.mobileNumber)) {
-    return c.json(
-      {
-        error: "Mobile number must be exactly 10 digits (e.g. 0771234567).",
-        code: "INVALID_MOBILE",
-        flags: ["INVALID_MOBILE"],
-      },
-      400
-    );
-  }
-  payload.mobileNumber = normalizeMobileNumber(payload.mobileNumber);
-
-  // --- Daily limit: max 3 submissions per contact number per Colombo calendar day ---
-  {
-    const { start, end } = colomboDayBoundsIso();
-    const dayCountRow = await env.DB.prepare(
-      `SELECT COUNT(*) AS cnt FROM submissions
-       WHERE mobile_number = ?
-         AND created_at_server >= ?
-         AND created_at_server < ?`
-    )
-      .bind(payload.mobileNumber, start, end)
-      .first<{ cnt: number }>();
-    const dayCount = dayCountRow?.cnt ?? 0;
-    if (dayCount >= 3) {
-      return c.json(
-        {
-          error: "This contact number has already submitted 3 claims today. Please try again tomorrow.",
-          code: "DAILY_LIMIT",
-          flags: ["DAILY_LIMIT"],
-          limit: 3,
-          used: dayCount,
-        },
-        429
-      );
-    }
-  }
-
   // Block desktop / PC submissions — claims must be from a mobile device at the dealer
   const device = payload.device || {};
   const ua = String(device.userAgent || "");
@@ -209,6 +140,8 @@ app.post("/api/submissions", async (c) => {
     .first<{ latitude: number | null; longitude: number | null }>();
 
   // --- Fraud evaluation ---
+  const clientInstallId = String((payload.device as any)?.installId || "").trim();
+
   const fraud = await evaluateFraud({
     env,
     db: env.DB,
@@ -221,9 +154,10 @@ app.post("/api/submissions", async (c) => {
     deviceHash,
     imageHash,
     mobileNumber: payload.mobileNumber,
+    installId: clientInstallId || undefined,
   });
 
-  // Hard block: same phone blueprint already used with a different contact number
+  // Hard block: same phone / browser already used with a different contact number
   if (fraud.multiMobileDevice) {
     return c.json(
       {
@@ -235,6 +169,32 @@ app.post("/api/submissions", async (c) => {
       },
       403
     );
+  }
+
+  // Extra guard: direct installId lookup (in case fraud helper missed)
+  if (clientInstallId) {
+    const extra = await env.DB.prepare(
+      `SELECT COUNT(DISTINCT mobile_number) AS cnt
+       FROM submissions
+       WHERE json_extract(device_raw_json, '$.installId') = ?
+         AND mobile_number IS NOT NULL
+         AND length(trim(mobile_number)) > 0
+         AND mobile_number != ?`
+    )
+      .bind(clientInstallId, payload.mobileNumber)
+      .first<{ cnt: number }>();
+    if ((extra?.cnt ?? 0) > 0) {
+      return c.json(
+        {
+          error:
+            "This phone was already used to submit claims with a different contact number. " +
+            "Each mobile number must use its own phone. If this is your number, contact support.",
+          code: "DEVICE_MULTI_MOBILE",
+          flags: ["FLAG_DEVICE_MULTI_MOBILE"],
+        },
+        403
+      );
+    }
   }
 
   // --- Resolve current payout rates & compute claimed reward ---

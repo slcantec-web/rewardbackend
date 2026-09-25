@@ -56,19 +56,22 @@ function blockIfDesktop() {
 // Device blueprint capture
 // ============================================================
 function getOrCreateInstallId() {
-  // Stable per-browser id — survives page reloads; cleared only if user wipes site data.
+  // Stable per-browser id — primary key for "same phone, different mobile" blocking.
   const KEY = "cantec_device_id";
-  try {
-    let id = localStorage.getItem(KEY);
-    if (!id) {
-      id = (crypto.randomUUID && crypto.randomUUID()) ||
-        ("id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10));
-      localStorage.setItem(KEY, id);
-    }
-    return id;
-  } catch (e) {
-    return null;
+  let id = null;
+  try { id = localStorage.getItem(KEY); } catch (e) { /* private mode */ }
+  if (!id) {
+    try { id = sessionStorage.getItem(KEY); } catch (e) { /* ignore */ }
   }
+  if (!id) {
+    id = (crypto.randomUUID && crypto.randomUUID()) ||
+      ("id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12));
+  }
+  try { localStorage.setItem(KEY, id); } catch (e) { /* ignore */ }
+  try { sessionStorage.setItem(KEY, id); } catch (e) { /* ignore */ }
+  // Also pin on window for this page session if storage is fully blocked
+  try { window.__cantecDeviceId = id; } catch (e) { /* ignore */ }
+  return id;
 }
 
 function captureDeviceBlueprint() {
@@ -379,60 +382,16 @@ function compressImage(file, maxDim, quality) {
   });
 }
 
-
-// ============================================================
-// Mobile number rules: exactly 10 digits; max 3 claims / day (server-enforced)
-// ============================================================
-function digitsOnly(value) {
-  return String(value || "").replace(/\D/g, "");
-}
-
-/** Normalize to 10-digit local mobile. Accepts 07XXXXXXXX or 947XXXXXXXX. */
-function normalizeMobile(value) {
-  let d = digitsOnly(value);
-  if (d.startsWith("94") && d.length >= 11) d = d.slice(2);
-  if (d.startsWith("0") && d.length === 10) return d;
-  if (d.length === 9 && !d.startsWith("0")) return "0" + d; // 771234567 → 0771234567
-  return d;
-}
-
-function isValidMobile10(value) {
-  const n = normalizeMobile(value);
-  return /^0\d{9}$/.test(n) && n.length === 10;
-}
-
-function updateMobileHint() {
-  const el = document.getElementById("mobileHint");
-  const raw = document.getElementById("mobileInput")?.value || "";
-  if (!el) return;
-  if (!raw.trim()) {
-    el.style.display = "none";
-    el.textContent = "";
-    return;
-  }
-  const n = normalizeMobile(raw);
-  if (isValidMobile10(raw)) {
-    el.style.display = "block";
-    el.style.color = "var(--ok, #16a34a)";
-    el.textContent = "✓ Valid 10-digit number (" + n + ")";
-  } else {
-    el.style.display = "block";
-    el.style.color = "var(--danger, #dc2626)";
-    el.textContent = "Mobile number must be exactly 10 digits (e.g. 0771234567). Currently: " + (n.length || 0) + " digit(s).";
-  }
-}
-
 function validateForm() {
   if (!isMobileDevice()) {
     document.getElementById("submitBtn").disabled = true;
     return;
   }
   const hasQty = Object.values(quantities).some((q) => q > 0);
-  const hasMobile = isValidMobile10(document.getElementById("mobileInput").value);
+  const hasMobile = document.getElementById("mobileInput").value.trim().length >= 9;
   const hasGps = !!(gpsData && gpsData.lat != null && gpsData.lng != null);
   const ready = !!(selectedDealerId && hasQty && billBase64 && hasGps && hasMobile);
   document.getElementById("submitBtn").disabled = !ready;
-  updateMobileHint();
 }
 
 async function submitClaim() {
@@ -448,18 +407,6 @@ async function submitClaim() {
     return;
   }
 
-  const rawMobile = document.getElementById("mobileInput").value.trim();
-  if (!isValidMobile10(rawMobile)) {
-    const banner = document.getElementById("resultBanner");
-    banner.style.display = "block";
-    banner.className = "result-banner err";
-    banner.innerHTML = "⚠️ Mobile number must be <b>exactly 10 digits</b> (e.g. 0771234567). Please correct it and try again.";
-    updateMobileHint();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    return;
-  }
-  const mobileNumber = normalizeMobile(rawMobile);
-
   const btn = document.getElementById("submitBtn");
   btn.disabled = true;
   btn.textContent = "Submitting…";
@@ -470,7 +417,7 @@ async function submitClaim() {
 
   const payload = {
     dealerId: selectedDealerId,
-    mobileNumber,
+    mobileNumber: document.getElementById("mobileInput").value.trim(),
     items,
     billImageBase64: billBase64,
     gps: gpsData,
@@ -501,14 +448,6 @@ async function submitClaim() {
           `⚠️ <b>This phone is already linked to another contact number.</b><br>` +
           `You cannot submit claims for a different number from the same device.<br>` +
           `Use the original mobile number for this phone, or contact CanTec support if you need help.`;
-      } else if (data.code === "INVALID_MOBILE" || (data.flags || []).includes("INVALID_MOBILE")) {
-        banner.innerHTML =
-          `⚠️ <b>Invalid mobile number.</b><br>` +
-          `Contact number must be exactly <b>10 digits</b> (e.g. 0771234567).`;
-      } else if (data.code === "DAILY_LIMIT" || (data.flags || []).includes("DAILY_LIMIT")) {
-        banner.innerHTML =
-          `⚠️ <b>Daily limit reached.</b><br>` +
-          `This contact number can submit a maximum of <b>3 claims per day</b>. Please try again tomorrow.`;
       } else {
         const msg = data.error || (data.flags || []).join(", ") || "see support";
         banner.innerHTML = `⚠️ Claim could not be accepted (${msg}).`;

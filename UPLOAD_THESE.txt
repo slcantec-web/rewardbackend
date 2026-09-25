@@ -1,16 +1,17 @@
-CanTec Rewards — 10-digit mobile + max 3 claims per day per number
+FIX: Same phone was still accepting different mobile numbers
 
-RULES
-1) Mobile must be exactly 10 digits (e.g. 0771234567). 94… country code is normalized.
-2) Same contact number: maximum 3 submissions per calendar day (Asia/Colombo).
+CAUSE
+- Device hash mixed unstable hardware signals; identical phones / UA drift changed the hash between claims
+- installId was not used as the primary binding key
 
-CUSTOMER UI
-- Live hint under the mobile field
-- Submit blocked until valid 10-digit number
-- Clear banners for invalid mobile and daily limit
+FIX
+- Fingerprint is now installId-primary (stable localStorage/sessionStorage id per browser)
+- Block checks BOTH device_fingerprint_hash AND json_extract(device_raw_json, $.installId)
+- Extra server guard on installId before accept
 
-UPLOAD
-- Worker: src/index.ts
-- Claim portal: public/app.js, public/index.html
+DEPLOY BOTH (required)
+1) Worker:  src/fraud.ts, src/index.ts  (+ src/types.ts if not already deployed)
+2) Claim portal: public/app.js
 
-Admin Pages — not required.
+Test: submit once with mobile A, then same phone different mobile B → must show block banner.
+Note: claims made BEFORE this deploy may not share the new installId link; retest with two NEW submits after deploy.
