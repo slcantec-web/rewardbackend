@@ -1,34 +1,29 @@
-UPLOAD-READY — 2-domain restore + PC block + GPS in finance
-============================================================
+UPLOAD-READY — configs filled with your live URLs
+=================================================
 
-Copy these paths into your GitHub repo root (overwrite existing):
+URLs configured:
+  Worker API:     https://customereward.slcantec.workers.dev
+  Claim portal:   https://rewards.cloudebase.dpdns.org   (public)
+  Admin portal:   https://admin.cloudebase.dpdns.org     (admin + finance)
 
-  public/config.js      ← set WORKER_URL + ADMIN_PORTAL_URL
-  public/app.js         ← mobile-only gate + GPS required
-  public/index.html     ← relative links + staff links via config
-  public/track.html     ← relative links + staff links via config
+Copy these paths into your GitHub repo root (overwrite):
 
-  admin/config.js       ← set WORKER_URL + CLAIM_PORTAL_URL
-  admin/index.html      ← relative portal links + Claim Portal URL
-  admin/finance.html    ← relative links + exact GPS in review panel
+  public/config.js
+  public/app.js
+  public/index.html
+  public/track.html
 
-  src/index.ts          ← server-side DESKTOP_BLOCKED + location required
+  admin/config.js
+  admin/index.html
+  admin/finance.html
 
-  README.md             ← 2-domain deploy notes (optional)
+  src/index.ts
 
-BEFORE PUSH — fill in your real URLs:
+  README.md   (optional)
 
-  public/config.js:
-    WORKER_URL        = "https://YOUR-WORKER.workers.dev"
-    ADMIN_PORTAL_URL  = "https://YOUR-ADMIN.pages.dev"
+No other edits needed. Push → Cloudflare redeploys both Pages + Worker.
 
-  admin/config.js:
-    WORKER_URL        = "https://YOUR-WORKER.workers.dev"
-    CLAIM_PORTAL_URL  = "https://YOUR-CLAIM.pages.dev"
-
-Cloudflare Pages:
-  - Claim portal project  → build output / root = public
-  - Admin/Finance project → build output / root = admin
-  - Worker                → from wrangler.toml / src/
-
-No new D1 migrations required.
+Pages projects:
+  - Claim  → root/build output = public
+  - Admin  → root/build output = admin
+  - Worker → from wrangler.toml / src/

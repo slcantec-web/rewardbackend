@@ -6,17 +6,12 @@
 //   - Admin + Finance Panel  → Pages project, build output = admin
 //   - API Worker             → Workers (from wrangler.toml / src/)
 //
-// Fill WORKER_URL when the Worker is on a different origin
-// (e.g. https://customereward.<account>.workers.dev).
-// Leave empty ("") only if you put a Worker Route for /api/*
-// on the SAME hostname as this Pages project.
-//
-// Fill CLAIM_PORTAL_URL with the Customer Pages custom domain
-// or *.pages.dev URL so "Claim Portal" links work across domains.
+// WORKER_URL: Worker origin (required — API is on a different origin)
+// CLAIM_PORTAL_URL: Customer Claim Portal custom domain (or *.pages.dev fallback)
 // ============================================================
 
-const WORKER_URL = ""; // e.g. "https://customereward.YOUR_SUBDOMAIN.workers.dev"
-const CLAIM_PORTAL_URL = ""; // e.g. "https://claim-your-project.pages.dev"
+const WORKER_URL = "https://customereward.slcantec.workers.dev";
+const CLAIM_PORTAL_URL = "https://rewards.cloudebase.dpdns.org";
 
 window.API_BASE = WORKER_URL || "";
 window.CLAIM_PORTAL_URL = CLAIM_PORTAL_URL || "";
