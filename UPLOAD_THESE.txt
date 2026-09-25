@@ -1,1 +1,1 @@
-FIX: /api/finance/queue?status=ALL returns all submissions (was filtering status='ALL'). Redeploy Worker.
+Split end customers vs dealers in summaries API + Finance/Admin UI. Bank invite only for end customers. Redeploy Worker + Admin Pages.

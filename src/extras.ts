@@ -888,7 +888,7 @@ export function registerExtras(app: App) {
       },
       rebuildStats,
       threshold,
-      apiVersion: "2026-09-24d-customers",
+      apiVersion: "2026-09-25-split-accounts",
       synced: true,
     });
   }
@@ -906,7 +906,7 @@ export function registerExtras(app: App) {
     )
       .bind(session.sub, null, "REBUILD_WALLETS_PAYOUTS", JSON.stringify(stats))
       .run();
-    return c.json({ ok: true, ...stats, apiVersion: "2026-09-24d-customers" });
+    return c.json({ ok: true, ...stats, apiVersion: "2026-09-25-split-accounts" });
   }
 
   app.post("/api/finance/payouts/rebuild", handleRebuildPayouts);
@@ -1047,66 +1047,72 @@ export function registerExtras(app: App) {
       if (d.id) dealerById.set(d.id, d);
     }
 
-    // Combine all unique keys (mobiles from submissions, contact phones from dealers, and dealers themselves)
-    const allKeys = new Set<string>();
-    for (const d of dealers || []) {
-      allKeys.add(d.contact_phone || d.id);
+    // -------------------------------------------------------------------------
+    // Separate lists (no mixing):
+    //   1) END CUSTOMERS — every mobile that submitted claims (payout/bank apply)
+    //   2) DEALERS — every row in dealers master (store accounts; no bank invite)
+    // -------------------------------------------------------------------------
+    const emptySub = {
+      total_submissions: 0,
+      approved_count: 0,
+      rejected_count: 0,
+      pending_count: 0,
+      approved_lkr: 0,
+      pending_lkr: 0,
+      rejected_lkr: 0,
+      claimed_lkr: 0,
+      max_risk: 0,
+      high_risk_count: 0,
+      flagged_count: 0,
+      geo_mismatch_count: 0,
+      duplicate_count: 0,
+      velocity_count: 0,
+      device_count: 0,
+      dealer_count: 0,
+      first_seen: null,
+      last_seen: null,
+    };
+
+    function matchesQuery(phone: string, name: string, code: string, city: string) {
+      if (!q) return true;
+      const qq = q.toLowerCase();
+      return (
+        (phone || "").toLowerCase().includes(qq) ||
+        (name || "").toLowerCase().includes(qq) ||
+        (code || "").toLowerCase().includes(qq) ||
+        (city || "").toLowerCase().includes(qq)
+      );
     }
-    for (const m of subMap.keys()) {
-      allKeys.add(m);
-    }
 
-    let customers = [];
-    for (const key of allKeys) {
-      const dealer = dealerByPhone.get(key) || dealerById.get(key);
-      const sub = subMap.get(key) || {
-        mobile_number: key,
-        total_submissions: 0,
-        approved_count: 0,
-        rejected_count: 0,
-        pending_count: 0,
-        approved_lkr: 0,
-        pending_lkr: 0,
-        rejected_lkr: 0,
-        claimed_lkr: 0,
-        max_risk: 0,
-        high_risk_count: 0,
-        flagged_count: 0,
-        geo_mismatch_count: 0,
-        duplicate_count: 0,
-        velocity_count: 0,
-        device_count: 0,
-        dealer_count: 0,
-        first_seen: null,
-        last_seen: null,
-      };
+    let customers: any[] = [];
 
-      const dealerClaims = dealer?.id ? dealerSubMap.get(dealer.id) : null;
-      const wallet = walletMap.get(key) || (dealer?.id ? walletMap.get(dealer.id) : null);
-      const paid = paidMap.get(key) || (dealer?.id ? paidMap.get(dealer.id) : null);
-      const pendingPay = pendingPayMap.get(key) || (dealer?.id ? pendingPayMap.get(dealer.id) : null);
-      const bank = bankMap.get(key) || (dealer?.id ? bankMap.get(dealer.id) : null);
-
+    // (1) End customers from claim mobiles only
+    for (const [mobile, sub] of subMap.entries()) {
+      if (!mobile || String(mobile).startsWith("DLR-")) continue;
+      const wallet = walletMap.get(mobile);
+      const paid = paidMap.get(mobile);
+      const pendingPay = pendingPayMap.get(mobile);
+      const bank = bankMap.get(mobile);
       const approved = Number(sub.approved_lkr || 0);
       const walletBal = wallet ? Number(wallet.balance_lkr || 0) : 0;
       const paidTotal = paid ? Number(paid.total || 0) : 0;
       const net = Math.max(0, approved - paidTotal);
+      const name = `Customer ${mobile}`;
+      if (!matchesQuery(mobile, name, "", "")) continue;
 
-      // Clean display phone (don't display internal slug ID as phone number)
-      const displayPhone = dealer?.contact_phone || (key.startsWith("DLR-") ? "" : key);
-
-      const entry = {
-        mobile_number: displayPhone || "—",
-        lookup_key: key,
-        dealer_name: dealer?.name || "Direct Customer",
-        customer_code: dealer?.customer_code || "—",
-        city: dealer?.city || "—",
-        address: dealer?.address || "—",
-        dealer_id: dealer?.id || null,
-        is_dealer: !!dealer,
-        is_new_dealer: !!dealer && sub.total_submissions === 0 && (!dealerClaims || dealerClaims.dealer_submissions === 0),
-        dealer_claims_count: dealerClaims?.dealer_submissions || 0,
-        dealer_approved_reward: dealerClaims?.dealer_approved_lkr || 0,
+      customers.push({
+        account_type: "end_customer",
+        is_dealer: false,
+        is_new_dealer: false,
+        mobile_number: mobile,
+        lookup_key: mobile,
+        dealer_name: name,
+        customer_code: "—",
+        city: "—",
+        address: "—",
+        dealer_id: null,
+        dealer_claims_count: 0,
+        dealer_approved_reward: 0,
         total_submissions: sub.total_submissions,
         approved_count: sub.approved_count,
         rejected_count: sub.rejected_count,
@@ -1127,27 +1133,73 @@ export function registerExtras(app: App) {
         last_seen: sub.last_seen,
         wallet_balance: walletBal,
         wallet_status: wallet?.status || "ACTIVE",
-        paid_lkr: paidTotal,
-        paid_count: paid?.count || 0,
-        pending_payout_lkr: pendingPay?.total || 0,
-        pending_payout_count: pendingPay?.count || 0,
         has_bank: !!bank,
         bank_name: bank?.bank_name || null,
         account_name: bank?.account_name || null,
-        net_payable: net,
-        payout_eligible: net >= threshold || walletBal >= threshold,
+        paid_payout_count: paid?.count || 0,
+        paid_payout_lkr: paidTotal,
+        pending_payout_count: pendingPay?.count || 0,
+        pending_payout_lkr: pendingPay ? Number(pendingPay.total || 0) : 0,
+        net_outstanding: net,
+        payout_eligible: walletBal >= threshold,
         suspect: Number(sub.high_risk_count) > 0 || Number(sub.flagged_count) > 0 || Number(sub.device_count) > 2,
-      };
+      });
+    }
 
-      if (q) {
-        const matchesPhone = (displayPhone || "").toLowerCase().includes(q);
-        const matchesName = (entry.dealer_name || "").toLowerCase().includes(q);
-        const matchesCode = (entry.customer_code || "").toLowerCase().includes(q);
-        const matchesCity = (entry.city || "").toLowerCase().includes(q);
-        if (!matchesPhone && !matchesName && !matchesCode && !matchesCity) continue;
-      }
+    // (2) Dealer master accounts — never show bank-invite UI for these
+    for (const d of dealers || []) {
+      const key = d.id;
+      const dealerClaims = dealerSubMap.get(d.id);
+      const phone = d.contact_phone || "";
+      // Store-side claim volume (claims submitted AT this dealer), not wallet of the store phone
+      const storeApproved = Number(dealerClaims?.dealer_approved_lkr || 0);
+      const storeSubs = Number(dealerClaims?.dealer_submissions || 0);
+      if (!matchesQuery(phone, d.name || "", d.customer_code || "", d.city || "")) continue;
 
-      customers.push(entry);
+      customers.push({
+        account_type: "dealer",
+        is_dealer: true,
+        is_new_dealer: storeSubs === 0,
+        mobile_number: phone || "—",
+        lookup_key: key,
+        dealer_name: d.name || "Dealer",
+        customer_code: d.customer_code || "—",
+        city: d.city || "—",
+        address: d.address || "—",
+        dealer_id: d.id,
+        dealer_claims_count: storeSubs,
+        dealer_approved_reward: storeApproved,
+        total_submissions: storeSubs,
+        approved_count: 0,
+        rejected_count: 0,
+        pending_count: 0,
+        approved_lkr: storeApproved,
+        pending_lkr: 0,
+        rejected_lkr: 0,
+        claimed_lkr: 0,
+        max_risk: 0,
+        high_risk_count: 0,
+        flagged_count: 0,
+        geo_mismatch_count: 0,
+        duplicate_count: 0,
+        velocity_count: 0,
+        device_count: 0,
+        dealer_count: 0,
+        first_seen: null,
+        last_seen: null,
+        wallet_balance: 0,
+        wallet_status: "N/A",
+        has_bank: false,
+        bank_name: null,
+        account_name: null,
+        paid_payout_count: 0,
+        paid_payout_lkr: 0,
+        pending_payout_count: 0,
+        pending_payout_lkr: 0,
+        net_outstanding: 0,
+        payout_eligible: false,
+        suspect: false,
+      });
     }
 
     if (sort === "approved") customers.sort((a, b) => b.approved_lkr - a.approved_lkr);
@@ -1159,15 +1211,18 @@ export function registerExtras(app: App) {
 
     customers = customers.slice(0, limit);
 
+    const endOnly = customers.filter((c) => !c.is_dealer);
+    const dealerOnly = customers.filter((c) => c.is_dealer);
     const totals = {
       customers: customers.length,
-      dealers_count: customers.filter(c => c.is_dealer).length,
-      approved_lkr: customers.reduce((a, x) => a + Number(x.approved_lkr || 0), 0),
-      pending_lkr: customers.reduce((a, x) => a + Number(x.pending_lkr || 0), 0),
-      wallet_balance_lkr: customers.reduce((a, x) => a + Number(x.wallet_balance || 0), 0),
-      eligible: customers.filter((x) => x.payout_eligible).length,
-      suspects: customers.filter((x) => x.suspect).length,
-      with_pending_payout: customers.filter((x) => x.pending_payout_count > 0).length,
+      end_customers_count: endOnly.length,
+      dealers_count: dealerOnly.length,
+      approved_lkr: endOnly.reduce((a, x) => a + Number(x.approved_lkr || 0), 0),
+      pending_lkr: endOnly.reduce((a, x) => a + Number(x.pending_lkr || 0), 0),
+      wallet_balance_lkr: endOnly.reduce((a, x) => a + Number(x.wallet_balance || 0), 0),
+      eligible: endOnly.filter((x) => x.payout_eligible).length,
+      suspects: endOnly.filter((x) => x.suspect).length,
+      with_pending_payout: endOnly.filter((x) => x.pending_payout_count > 0).length,
     };
 
     return c.json({

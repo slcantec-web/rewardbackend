@@ -1019,6 +1019,10 @@ async function createBankInvite(mobile) {
 }
 
 async function shareBankInvite(mobile) {
+  if (!mobile || mobile === "—" || mobile === "undefined") {
+    alert("Bank details invites are only for end customers with a mobile number.");
+    return;
+  }
   try {
     const inv = await createBankInvite(mobile);
     const text = `CanTec Rewards: please add your bank account for payout using this secure link (valid 7 days):\n${inv.url}`;
@@ -1052,6 +1056,10 @@ async function shareBankInvite(mobile) {
 // -------------------------------------------------------------
 // CUSTOMER SUMMARIES VIEW
 // -------------------------------------------------------------
+let financeSummariesFilter = "END_CUSTOMERS";
+let financeSummariesCache = [];
+let financeSummariesThreshold = 1000;
+
 async function loadCustomerSummaries() {
   const panel = document.getElementById("reviewPanel");
   panel.innerHTML = `<div style="padding:40px 0;text-align:center;color:var(--text-muted);">Loading customer rollups…</div>`;
@@ -1059,43 +1067,83 @@ async function loadCustomerSummaries() {
   try {
     const res = await fetch(`${API_BASE}/api/finance/customer-summaries`, { headers: authHeaders() });
     const data = await res.json();
-    const customers = data.customers || [];
-    const threshold = data.threshold || 1000;
+    financeSummariesCache = data.customers || [];
+    financeSummariesThreshold = data.threshold || 1000;
+    renderFinanceSummaries();
+  } catch (e) {
+    panel.innerHTML = `<div style="padding:24px;color:red;">Error loading summaries: ${e.message}</div>`;
+  }
+}
 
-    const rows = customers.map(c => `
+function setFinanceSummariesFilter(f) {
+  financeSummariesFilter = f;
+  renderFinanceSummaries();
+}
+
+function renderFinanceSummaries() {
+  const panel = document.getElementById("reviewPanel");
+  if (!panel) return;
+  const threshold = financeSummariesThreshold;
+  const all = financeSummariesCache;
+  const endCount = all.filter(c => !c.is_dealer).length;
+  const dealerCount = all.filter(c => c.is_dealer).length;
+
+  const customers = all.filter(c => {
+    if (financeSummariesFilter === "DEALERS") return !!c.is_dealer;
+    if (financeSummariesFilter === "END_CUSTOMERS") return !c.is_dealer;
+    return true;
+  });
+
+  const rows = customers.map(c => {
+    const isDealer = !!c.is_dealer;
+    const bankCell = isDealer
+      ? `<span class="status-chip chip-muted">Dealer account</span><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Bank invite not used</div>`
+      : (c.has_bank
+        ? `<span class="status-chip chip-success">✓ Bank Saved</span>`
+        : `<span class="status-chip chip-warning">No Bank</span>
+           <div style="margin-top:6px;">
+             <button class="btn btn-primary btn-sm" onclick="shareBankInvite('${c.mobile_number}')">Request bank details</button>
+           </div>`);
+    const payoutCell = isDealer
+      ? `<span class="status-chip chip-muted">—</span>`
+      : (c.payout_eligible
+        ? `<span class="status-chip chip-success">Eligible (≥ ${threshold})</span>`
+        : `<span class="status-chip chip-muted">Accumulating</span>`);
+    return `
       <tr>
         <td>
-          <b style="color:var(--primary);">${c.dealer_name || "Direct Customer"}</b>
-          ${c.customer_code ? `<div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${c.customer_code}</div>` : ''}
+          <div style="margin-bottom:4px;">
+            ${isDealer
+              ? `<span class="status-chip chip-muted">Dealer</span>`
+              : `<span class="status-chip chip-success">End customer</span>`}
+          </div>
+          <b style="color:var(--primary);">${c.dealer_name || (isDealer ? "Dealer" : "Customer")}</b>
+          ${c.customer_code && c.customer_code !== "—" ? `<div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${c.customer_code}</div>` : ""}
         </td>
-        <td class="mono"><b>${c.mobile_number}</b></td>
-        <td>${c.city || '—'}</td>
-        <td><b>${c.total_submissions}</b> <span style="font-size:0.75rem;color:var(--text-muted);">(A:${c.approved_count} / P:${c.pending_count})</span></td>
-        <td class="mono"><b>LKR ${(c.approved_lkr || 0).toLocaleString()}</b></td>
+        <td class="mono"><b>${c.mobile_number || "—"}</b></td>
+        <td>${c.city || "—"}</td>
+        <td><b>${c.total_submissions || 0}</b> ${!isDealer ? `<span style="font-size:0.75rem;color:var(--text-muted);">(A:${c.approved_count || 0} / P:${c.pending_count || 0})</span>` : `<span style="font-size:0.75rem;color:var(--text-muted);">store claims</span>`}</td>
+        <td class="mono"><b>LKR ${Number(c.approved_lkr || 0).toLocaleString()}</b></td>
         <td class="mono" style="font-size:0.95rem;color:var(--primary);font-weight:700;">
-          LKR ${(c.wallet_balance || 0).toLocaleString()}
+          ${isDealer ? "—" : `LKR ${Number(c.wallet_balance || 0).toLocaleString()}`}
         </td>
-        <td>
-          ${c.has_bank
-            ? `<span class="status-chip chip-success">✓ Bank Saved</span>`
-            : `<span class="status-chip chip-warning">No Bank</span>
-               <div style="margin-top:6px;">
-                 <button class="btn btn-primary btn-sm" onclick="shareBankInvite('${c.mobile_number}')">Request bank details</button>
-               </div>`}
-        </td>
-        <td>
-          ${c.payout_eligible ? `<span class="status-chip chip-success">Eligible (&ge; ${threshold})</span>` : `<span class="status-chip chip-muted">Accumulating</span>`}
-        </td>
-      </tr>
-    `).join("");
+        <td>${bankCell}</td>
+        <td>${payoutCell}</td>
+      </tr>`;
+  }).join("");
 
-    panel.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+  panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
         <div>
           <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-0.02em;">Customer Intelligence &amp; Summaries</h2>
-          <p style="font-size:0.85rem;color:var(--text-muted);">Aggregated customer and retail dealer reward history across all submissions.</p>
+          <p style="font-size:0.85rem;color:var(--text-muted);">End customers (claimants) and dealers (stores) are listed separately. Bank requests apply only to end customers.</p>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="loadCustomerSummaries()">🔄 Refresh</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        <button class="btn ${financeSummariesFilter === 'END_CUSTOMERS' ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="setFinanceSummariesFilter('END_CUSTOMERS')">End customers (${endCount})</button>
+        <button class="btn ${financeSummariesFilter === 'DEALERS' ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="setFinanceSummariesFilter('DEALERS')">Dealers / stores (${dealerCount})</button>
+        <button class="btn ${financeSummariesFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="setFinanceSummariesFilter('ALL')">All (${financeSummariesCache.length})</button>
       </div>
 
       <div class="panel" style="padding:0;overflow:hidden;">
@@ -1120,9 +1168,6 @@ async function loadCustomerSummaries() {
         </div>
       </div>
     `;
-  } catch (e) {
-    panel.innerHTML = `<div class="panel" style="color:red;">Error loading customer summaries: ${e.message}</div>`;
-  }
 }
 
 // -------------------------------------------------------------
