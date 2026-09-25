@@ -1,28 +1,33 @@
-FLASH-LOOP FIX + live URLs
-==========================
+FIX: Finance review queue + finance portal access
+================================================
 
-Root cause of admin "flashing / refresh loop":
-  On API 401 the page did location.reload() but left the bad token in
-  localStorage → reload picked it up again → infinite flash.
+Problems fixed:
+1. Review / audit queue was calling /api/finance/submissions (404).
+   Now uses /api/finance/queue (and server also has submissions alias).
+2. Finance portal was hard to find.
+   - Admin login page now has: "Finance staff? Open Finance Review Dashboard →"
+   - If a finance user tries Admin login, they get a direct link to finance.html
+3. Demo credentials (finance/finance123) are NOT in your live D1.
+   Use the finance users you created under Admin → Staff.
 
-Fix:
-  admin/index.html + admin/finance.html now call clearSessionAndReload()
-  which removes adminToken / financeToken from localStorage before reload.
+Finance portal URL (bookmark this):
+  https://admin.cloudebase.dpdns.org/finance.html
 
-URLs already filled:
-  Worker:  https://customereward.slcantec.workers.dev
-  Claim:   https://rewards.cloudebase.dpdns.org
-  Admin:   https://admin.cloudebase.dpdns.org
+Admin portal:
+  https://admin.cloudebase.dpdns.org/
 
 Overwrite in repo:
-  public/config.js, public/app.js, public/index.html, public/track.html
-  admin/config.js, admin/index.html, admin/finance.html
-  src/index.ts
+  admin/index.html
+  admin/finance.html
+  src/extras.ts
+  (+ other files already in this zip if not yet deployed)
 
-After push: hard-refresh admin (Ctrl+Shift+R) or clear site data once
-so any old invalid token is gone. You should land on the login screen
-instead of a loop.
+After push:
+  1. Redeploy Admin Pages + Worker
+  2. Open https://admin.cloudebase.dpdns.org/finance.html
+  3. Sign in with one of your finance_staff / finance_lead usernames
+  4. Review queue should load
 
-Worker secrets required (Cloudflare dashboard → Worker → Settings → Variables):
+Worker secrets (required for login tokens to work):
   ADMIN_JWT_SECRET
   FINANCE_JWT_SECRET

@@ -451,20 +451,21 @@
     
     <div style="margin-bottom:14px;">
       <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Username</label>
-      <input type="text" id="username" placeholder="finance or admin" value="finance" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;" />
+      <input type="text" id="username" placeholder="finance or admin" value="" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;" />
     </div>
     <div style="margin-bottom:16px;">
       <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Password</label>
-      <input type="password" id="password" placeholder="••••••••" value="finance123" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;" />
+      <input type="password" id="password" placeholder="••••••••" value="" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;" />
     </div>
     
     <button class="btn btn-primary" id="loginBtn" style="width:100%;padding:11px;font-size:0.9rem;">Sign In to Finance</button>
     <div id="loginError" style="color:var(--danger);font-size:0.85rem;margin-top:10px;display:none;"></div>
 
     <div style="margin-top:20px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:0.78rem;color:#64748b;">
-      <div style="font-weight:600;color:#0f172a;margin-bottom:4px;">Demo Accounts:</div>
-      <div>Staff: <b>finance</b> / <b>finance123</b></div>
-      <div>Lead / Admin: <b>lead</b> / <b>lead123</b> or <b>admin</b> / <b>admin123</b></div>
+      <div style="font-weight:600;color:#0f172a;margin-bottom:4px;">Finance staff login</div>
+      <div>Use the <b>finance_staff</b> / <b>finance_lead</b> usernames created in Admin → Staff.</div>
+      <div style="margin-top:6px;">Admin users can also sign in here.</div>
+      <div style="margin-top:8px;"><a href="index.html" style="color:var(--primary);font-weight:600;">← Admin Console</a></div>
     </div>
   </div>
 </div>
@@ -646,7 +647,7 @@ function showPayoutsView() {
 // -------------------------------------------------------------
 async function loadQueue() {
   try {
-    const res = await fetch(`${API_BASE}/api/finance/submissions?status=${queueFilter}`, { headers: authHeaders() });
+    const res = await fetch(`${API_BASE}/api/finance/queue?status=${queueFilter}`, { headers: authHeaders() });
     if (res.status === 401) { clearSessionAndReload(); return; }
     const data = await res.json();
     cachedSubmissions = data.submissions || [];

@@ -527,6 +527,23 @@ export function registerExtras(app: App) {
     return c.json({ submissions: results });
   });
 
+  // Alias used by older finance UI builds
+  app.get("/api/finance/submissions", async (c) => {
+    if (!(await financeSession(c, ["finance_staff", "finance_lead"]))) return c.json({ error: "Unauthorized" }, 401);
+    const status = c.req.query("status") || "PENDING";
+    const { results } = await c.env.DB.prepare(
+      `SELECT s.id, s.mobile_number, s.dealer_id, d.name AS dealer_name, s.status, s.risk_score, s.fraud_flags,
+              s.created_at_server, s.total_claimed_reward_lkr,
+              (SELECT COUNT(*) FROM submissions x WHERE x.device_fingerprint_hash = s.device_fingerprint_hash) AS device_submissions,
+              (SELECT COUNT(DISTINCT x.mobile_number) FROM submissions x WHERE x.device_fingerprint_hash = s.device_fingerprint_hash) AS device_mobiles
+       FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id
+       WHERE s.status = ? ORDER BY s.created_at_server ASC LIMIT 50`
+    )
+      .bind(status)
+      .all();
+    return c.json({ submissions: results });
+  });
+
   app.get("/api/finance/submissions/:id", async (c) => {
     const session = await financeSession(c, ["finance_staff", "finance_lead"]);
     if (!session) return c.json({ error: "Unauthorized" }, 401);

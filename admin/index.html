@@ -759,6 +759,9 @@
       Sign In to Command Center
     </button>
     <div id="loginError" class="banner err"></div>
+    <div style="margin-top:16px;text-align:center;font-size:0.82rem;color:#64748b;">
+      Finance staff? <a href="finance.html" style="color:#2563eb;font-weight:600;">Open Finance Review Dashboard →</a>
+    </div>
 
     <div style="margin-top:20px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:0.78rem;color:#64748b;">
       <div style="font-weight:600;color:#0f172a;margin-bottom:4px;">Default Demo Credentials:</div>
@@ -1019,7 +1022,7 @@ document.getElementById("loginSubmitBtn").addEventListener("click", async () => 
     if (!res.ok) { msg.className = "banner err"; msg.textContent = data.error || "Authentication failed."; return; }
     if (data.role !== "admin") {
       msg.className = "banner err";
-      msg.textContent = "This portal requires Administrator access. Use Finance Dashboard for staff accounts.";
+      msg.innerHTML = "This portal is for <b>Admin</b> only.<br>Finance staff → open <a href=\"finance.html\" style=\"color:inherit;font-weight:700;text-decoration:underline;\">Finance Review Dashboard</a> and sign in there.";
       return;
     }
     token = data.token;
