@@ -735,38 +735,8 @@
 </head>
 <body>
 
-<!-- Login Modal -->
-<div id="loginOverlay">
-  <div class="login-box">
-    <div class="login-logo">
-      <div class="brand-icon">C</div>
-      <div>
-        <h2 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.15rem;font-weight:800;letter-spacing:-0.02em;">CanTec Rewards</h2>
-        <p style="font-size:0.8rem;color:var(--text-muted);">Admin Command Center</p>
-      </div>
-    </div>
-    
-    <div style="margin-bottom:14px;">
-      <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Username</label>
-      <input type="text" id="loginUsername" placeholder="Username" value="" />
-    </div>
-    <div style="margin-bottom:18px;">
-      <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Password</label>
-      <input type="password" id="loginPassword" placeholder="Password" value="" />
-    </div>
-    
-    <button class="btn btn-primary" id="loginSubmitBtn" style="width:100%;padding:11px;font-size:0.9rem;">
-      Sign In to Command Center
-    </button>
-    <div id="loginError" class="banner err"></div>
-    <div style="margin-top:16px;text-align:center;font-size:0.82rem;color:#64748b;">
-      Finance staff? <a href="finance.html" style="color:#2563eb;font-weight:600;">Open Finance Review Dashboard →</a>
-    </div>
-  </div>
-</div>
-
-<!-- Main Application Interface -->
-<div id="app" style="display:none;">
+<!-- Main Application Interface (auth required — unauthenticated users go to login.html) -->
+<div id="app" style="display:block;">
   <!-- Enterprise Header -->
   <header class="top-header">
     <div class="nav-inner">
@@ -980,67 +950,39 @@
 
 <script>
 const API_BASE = window.API_BASE || "";
-let token = localStorage.getItem("adminToken") || null;
-let currentUsername = localStorage.getItem("adminUsername") || "admin";
-let activePayoutId = null;
+let token = localStorage.getItem("staffToken") || localStorage.getItem("adminToken") || localStorage.getItem("financeToken") || null;
+let currentUsername = localStorage.getItem("staffUsername") || localStorage.getItem("adminUsername") || localStorage.getItem("financeUsername") || "admin";
+let currentRole = localStorage.getItem("staffRole") || localStorage.getItem("financeRole") || (localStorage.getItem("adminToken") ? "admin" : null);
 
-// 2-domain: Claim Portal lives on the customer Pages project
-(function wireClaimPortalLink() {
-  const el = document.getElementById("linkClaimPortal");
-  if (!el) return;
-  const base = (window.CLAIM_PORTAL_URL || "").replace(/\/$/, "");
-  el.href = base ? base + "/" : "/";
-})();
+function clearAllSession() {
+  ["adminToken","adminUsername","financeToken","financeRole","financeUsername","staffToken","staffRole","staffUsername"].forEach(k => localStorage.removeItem(k));
+  token = null;
+  currentRole = null;
+}
 
-// Ensure token works seamlessly across Admin and Finance
-if (token) {
+function requireAdminSession() {
+  // Admin console is for admin role only
+  if (!token || currentRole !== "admin") {
+    clearAllSession();
+    location.replace("login.html");
+    return false;
+  }
+  return true;
+}
+
+// Keep finance keys in sync so Admin → Finance Queue stays signed in
+if (token && currentRole === "admin") {
   localStorage.setItem("financeToken", token);
   localStorage.setItem("financeRole", "admin");
   localStorage.setItem("financeUsername", currentUsername);
+  localStorage.setItem("staffToken", token);
+  localStorage.setItem("staffRole", "admin");
+  localStorage.setItem("staffUsername", currentUsername);
 }
 
-// -------------------------------------------------------------
-// Authentication & Session
-// -------------------------------------------------------------
-document.getElementById("loginSubmitBtn").addEventListener("click", async () => {
-  const u = document.getElementById("loginUsername").value.trim();
-  const p = document.getElementById("loginPassword").value;
-  const msg = document.getElementById("loginError");
-  msg.className = "banner";
-
-  try {
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: u, password: p })
-    });
-    const data = await res.json();
-    if (!res.ok) { msg.className = "banner err"; msg.textContent = data.error || "Authentication failed."; return; }
-    if (data.role !== "admin") {
-      msg.className = "banner err";
-      msg.innerHTML = "This portal is for <b>Admin</b> only.<br>Finance staff → open <a href=\"finance.html\" style=\"color:inherit;font-weight:700;text-decoration:underline;\">Finance Review Dashboard</a> and sign in there.";
-      return;
-    }
-    token = data.token;
-    currentUsername = u;
-    localStorage.setItem("adminToken", token);
-    localStorage.setItem("adminUsername", u);
-    localStorage.setItem("financeToken", token);
-    localStorage.setItem("financeRole", "admin");
-    localStorage.setItem("financeUsername", u);
-    showApp();
-  } catch (err) {
-    msg.className = "banner err";
-    msg.textContent = "Server connection error.";
-  }
-});
-
 document.getElementById("logoutBtn").addEventListener("click", () => {
-  localStorage.removeItem("adminToken");
-  localStorage.removeItem("adminUsername");
-  localStorage.removeItem("financeToken");
-  localStorage.removeItem("financeRole");
-  localStorage.removeItem("financeUsername");
-  location.reload();
+  clearAllSession();
+  location.replace("login.html");
 });
 
 function authHeaders() {
@@ -1048,27 +990,23 @@ function authHeaders() {
 }
 
 function clearSessionAndReload() {
-  token = null;
-  localStorage.removeItem("adminToken");
-  localStorage.removeItem("adminUsername");
-  localStorage.removeItem("financeToken");
-  localStorage.removeItem("financeRole");
-  localStorage.removeItem("financeUsername");
-  location.reload();
+  clearAllSession();
+  location.replace("login.html");
 }
 
-
 function showApp() {
-  document.getElementById("loginOverlay").style.display = "none";
   document.getElementById("app").style.display = "block";
   document.getElementById("userNameLabel").textContent = currentUsername;
+  document.getElementById("userRoleLabel").textContent = "Master Admin";
   document.getElementById("avatarLetter").textContent = currentUsername.charAt(0).toUpperCase();
 
   loadOverview();
   updateHeaderCounts();
 }
 
-if (token) {
+if (!requireAdminSession()) {
+  // redirect in progress
+} else {
   showApp();
 }
 

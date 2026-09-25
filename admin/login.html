@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CanTec Rewards — Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #0f766e;
+      --primary-hover: #115e59;
+      --danger: #dc2626;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: radial-gradient(circle at top, #0f2c25 0%, #061510 100%);
+      color: var(--text);
+    }
+    .login-card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 36px 32px 28px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+    }
+    .login-logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0f766e, #14b8a6);
+      color: #fff;
+      font-family: "Plus Jakarta Sans", sans-serif;
+      font-weight: 800;
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .login-logo h1 {
+      font-family: "Plus Jakarta Sans", sans-serif;
+      font-size: 1.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .login-logo p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #334155;
+    }
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      background: #fff;
+    }
+    input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+    }
+    .field { margin-bottom: 16px; }
+    .btn-primary {
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 10px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-primary:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+    .error {
+      display: none;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: var(--danger);
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+    .error.show { display: block; }
+    .hint {
+      margin-top: 22px;
+      padding: 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      color: #64748b;
+      line-height: 1.5;
+    }
+    .hint strong { color: #0f172a; }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="brand-icon">C</div>
+      <div>
+        <h1>CanTec Rewards</h1>
+        <p>Staff sign-in · Admin &amp; Finance</p>
+      </div>
+    </div>
+
+    <form id="loginForm" autocomplete="on">
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="Your staff username" autocomplete="username" required autofocus />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="btn-primary" id="loginBtn">Sign in</button>
+      <div id="loginError" class="error" role="alert"></div>
+    </form>
+
+    <div class="hint">
+      <strong>One login for everyone.</strong><br />
+      Admins open the Admin Console. Finance staff and leads open the Review Queue.
+      After sign-in you are taken to the right workspace automatically.
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script>
+    const API_BASE = window.API_BASE || "";
+
+    function clearAllSession() {
+      [
+        "adminToken", "adminUsername",
+        "financeToken", "financeRole", "financeUsername",
+        "staffToken", "staffRole", "staffUsername"
+      ].forEach((k) => localStorage.removeItem(k));
+    }
+
+    function saveSession(token, role, username) {
+      localStorage.setItem("staffToken", token);
+      localStorage.setItem("staffRole", role);
+      localStorage.setItem("staffUsername", username);
+
+      // Dual-write so existing Admin / Finance pages keep working
+      if (role === "admin") {
+        localStorage.setItem("adminToken", token);
+        localStorage.setItem("adminUsername", username);
+        localStorage.setItem("financeToken", token);
+        localStorage.setItem("financeRole", "admin");
+        localStorage.setItem("financeUsername", username);
+      } else {
+        localStorage.setItem("financeToken", token);
+        localStorage.setItem("financeRole", role);
+        localStorage.setItem("financeUsername", username);
+        localStorage.removeItem("adminToken");
+        localStorage.removeItem("adminUsername");
+      }
+    }
+
+    function destinationForRole(role) {
+      if (role === "admin") return "index.html";
+      // finance_staff, finance_lead, or any other staff role
+      return "finance.html";
+    }
+
+    // Already signed in? Send them to the right place.
+    (function redirectIfLoggedIn() {
+      const token =
+        localStorage.getItem("staffToken") ||
+        localStorage.getItem("financeToken") ||
+        localStorage.getItem("adminToken");
+      const role =
+        localStorage.getItem("staffRole") ||
+        localStorage.getItem("financeRole") ||
+        (localStorage.getItem("adminToken") ? "admin" : null);
+      if (token && role) {
+        location.replace(destinationForRole(role));
+      }
+    })();
+
+    const form = document.getElementById("loginForm");
+    const errEl = document.getElementById("loginError");
+    const btn = document.getElementById("loginBtn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      errEl.classList.remove("show");
+      errEl.textContent = "";
+      btn.disabled = true;
+      btn.textContent = "Signing in…";
+
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          errEl.textContent = data.error || "Invalid username or password.";
+          errEl.classList.add("show");
+          return;
+        }
+        if (!data.token || !data.role) {
+          errEl.textContent = "Unexpected response from server.";
+          errEl.classList.add("show");
+          return;
+        }
+
+        clearAllSession();
+        saveSession(data.token, data.role, username);
+        location.replace(destinationForRole(data.role));
+      } catch (err) {
+        errEl.textContent = "Cannot reach the server. Check your connection and try again.";
+        errEl.classList.add("show");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Sign in";
+      }
+    });
+  </script>
+</body>
+</html>

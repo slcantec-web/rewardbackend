@@ -1,1 +1,17 @@
-Split end customers vs dealers in summaries API + Finance/Admin UI. Bank invite only for end customers. Redeploy Worker + Admin Pages.
+CanTec Rewards — Admin/Finance login fix (deploy Admin Pages only)
+
+WHAT CHANGED
+- Common staff login: admin/login.html (one page for Admin + Finance)
+- Sign-out from Finance Review Queue fully clears session → returns to login
+- Admin/Finance pages redirect to login.html if not signed in
+- Role after login: admin → index.html | finance_staff / finance_lead → finance.html
+
+UPLOAD (Cloudflare Pages — Admin project, build output = admin folder)
+  admin/login.html   ← NEW (common login)
+  admin/index.html   ← updated
+  admin/finance.html ← updated
+  admin/config.js    ← include if you replace whole admin/
+
+Worker + Claim Portal (public/) — NOT required for this fix.
+
+After deploy: open https://YOUR-ADMIN-DOMAIN/login.html

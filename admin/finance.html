@@ -438,40 +438,8 @@
 </head>
 <body>
 
-<!-- Login Overlay -->
-<div id="loginOverlay">
-  <div class="login-card">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-      <div class="brand-icon" style="width:40px;height:40px;font-size:1.2rem;">C</div>
-      <div>
-        <h2 style="font-size:1.15rem;font-weight:800;letter-spacing:-0.02em;">CanTec Rewards</h2>
-        <p style="font-size:0.8rem;color:var(--text-muted);">Finance Review &amp; Settlement</p>
-      </div>
-    </div>
-    
-    <div style="margin-bottom:14px;">
-      <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Username</label>
-      <input type="text" id="username" placeholder="finance or admin" value="" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;" />
-    </div>
-    <div style="margin-bottom:16px;">
-      <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Password</label>
-      <input type="password" id="password" placeholder="••••••••" value="" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;" />
-    </div>
-    
-    <button class="btn btn-primary" id="loginBtn" style="width:100%;padding:11px;font-size:0.9rem;">Sign In to Finance</button>
-    <div id="loginError" style="color:var(--danger);font-size:0.85rem;margin-top:10px;display:none;"></div>
-
-    <div style="margin-top:20px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:0.78rem;color:#64748b;">
-      <div style="font-weight:600;color:#0f172a;margin-bottom:4px;">Finance staff login</div>
-      <div>Use the <b>finance_staff</b> / <b>finance_lead</b> usernames created in Admin → Staff.</div>
-      <div style="margin-top:6px;">Admin users can also sign in here.</div>
-      <div style="margin-top:8px;"><a href="index.html" style="color:var(--primary);font-weight:600;">← Admin Console</a></div>
-    </div>
-  </div>
-</div>
-
-<!-- Main Finance Interface -->
-<div id="app" style="display:none;height:100vh;flex-direction:column;">
+<!-- Main Finance Interface (auth required — unauthenticated users go to login.html) -->
+<div id="app" style="display:flex;height:100vh;flex-direction:column;">
   <!-- Enterprise Header -->
   <header class="enterprise-nav">
     <div class="nav-inner">
@@ -484,7 +452,7 @@
       </a>
 
       <div class="portal-switch">
-        <a href="index.html" class="portal-link">← Admin Panel</a>
+        <a href="index.html" class="portal-link" id="linkAdminPanel">← Admin Panel</a>
         <a href="#" id="navQueue" class="portal-link active">Review Queue</a>
         <a href="#" id="navCustomers" class="portal-link">Customer Summaries</a>
         <a href="#" id="navPayouts" class="portal-link">Payout Ledger</a>
@@ -535,9 +503,39 @@
 <script src="config.js"></script>
 <script>
 const API_BASE = window.API_BASE || "";
-let token = localStorage.getItem("financeToken") || localStorage.getItem("adminToken") || null;
-let role = localStorage.getItem("financeRole") || (localStorage.getItem("adminToken") ? "admin" : null);
-let username = localStorage.getItem("financeUsername") || localStorage.getItem("adminUsername") || "staff";
+let token = localStorage.getItem("staffToken") || localStorage.getItem("financeToken") || localStorage.getItem("adminToken") || null;
+let role = localStorage.getItem("staffRole") || localStorage.getItem("financeRole") || (localStorage.getItem("adminToken") ? "admin" : null);
+let username = localStorage.getItem("staffUsername") || localStorage.getItem("financeUsername") || localStorage.getItem("adminUsername") || "staff";
+
+function clearAllSession() {
+  ["adminToken","adminUsername","financeToken","financeRole","financeUsername","staffToken","staffRole","staffUsername"].forEach(k => localStorage.removeItem(k));
+  token = null;
+  role = null;
+}
+
+function requireStaffSession() {
+  const allowed = ["admin", "finance_staff", "finance_lead"];
+  if (!token || !role || !allowed.includes(role)) {
+    clearAllSession();
+    location.replace("login.html");
+    return false;
+  }
+  return true;
+}
+
+// Keep dual keys in sync for Admin ↔ Finance navigation
+if (token && role) {
+  localStorage.setItem("staffToken", token);
+  localStorage.setItem("staffRole", role);
+  localStorage.setItem("staffUsername", username);
+  localStorage.setItem("financeToken", token);
+  localStorage.setItem("financeRole", role);
+  localStorage.setItem("financeUsername", username);
+  if (role === "admin") {
+    localStorage.setItem("adminToken", token);
+    localStorage.setItem("adminUsername", username);
+  }
+}
 let currentId = null;
 let queueFilter = "PENDING";
 let cachedSubmissions = [];
@@ -550,42 +548,9 @@ let cachedSubmissions = [];
   el.href = base ? base + "/" : "/";
 })();
 
-document.getElementById("loginBtn").addEventListener("click", async () => {
-  const u = document.getElementById("username").value.trim();
-  const p = document.getElementById("password").value;
-  const msg = document.getElementById("loginError");
-  msg.style.display = "none";
-
-  try {
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: u, password: p })
-    });
-    const data = await res.json();
-    if (!res.ok) { msg.style.display = "block"; msg.textContent = data.error || "Login failed."; return; }
-
-    token = data.token;
-    role = data.role;
-    username = u;
-    localStorage.setItem("financeToken", token);
-    localStorage.setItem("financeRole", role);
-    localStorage.setItem("financeUsername", username);
-    if (role === "admin") {
-      localStorage.setItem("adminToken", token);
-      localStorage.setItem("adminUsername", username);
-    }
-    showApp();
-  } catch (err) {
-    msg.style.display = "block";
-    msg.textContent = "Server error.";
-  }
-});
-
 document.getElementById("logoutBtn").addEventListener("click", () => {
-  localStorage.removeItem("financeToken");
-  localStorage.removeItem("financeRole");
-  localStorage.removeItem("financeUsername");
-  location.reload();
+  clearAllSession();
+  location.replace("login.html");
 });
 
 function authHeaders() {
@@ -593,22 +558,21 @@ function authHeaders() {
 }
 
 function clearSessionAndReload() {
-  token = null;
-  localStorage.removeItem("financeToken");
-  localStorage.removeItem("financeRole");
-  localStorage.removeItem("financeUsername");
-  localStorage.removeItem("adminToken");
-  localStorage.removeItem("adminUsername");
-  location.reload();
+  clearAllSession();
+  location.replace("login.html");
 }
 
-
 function showApp() {
-  document.getElementById("loginOverlay").style.display = "none";
   document.getElementById("app").style.display = "flex";
   document.getElementById("whoLabel").textContent = username;
-  document.getElementById("roleLabel").textContent = role ? role.replace("_", " ") : "finance";
+  document.getElementById("roleLabel").textContent = role ? role.replace(/_/g, " ") : "finance";
   document.getElementById("avatarLetter").textContent = username.charAt(0).toUpperCase();
+
+  // Only admins see "Admin Panel" switch; finance roles stay in this portal
+  const adminLink = document.getElementById("linkAdminPanel");
+  if (adminLink) {
+    adminLink.style.display = (role === "admin") ? "" : "none";
+  }
 
   // Navigation handlers
   document.getElementById("navQueue").addEventListener("click", (e) => { e.preventDefault(); showQueueView(); });
@@ -1312,7 +1276,11 @@ function exportFinanceCsv() {
     .catch(err => alert("Export error: " + err.message));
 }
 
-if (token) showApp();
+if (!requireStaffSession()) {
+  // redirect to login.html in progress
+} else {
+  showApp();
+}
 </script>
 </body>
 </html>
