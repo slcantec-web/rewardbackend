@@ -29,6 +29,14 @@ async function sessionFrom(c: any, secret: string): Promise<SessionPayload | nul
   }
 }
 
+
+/** Bill approve / reject / qty verify — Finance roles only (admin cannot). */
+async function financeStaffOnly(c: any) {
+  const sf = await sessionFrom(c, c.env.FINANCE_JWT_SECRET);
+  if (sf && (sf.role === "finance_staff" || sf.role === "finance_lead")) return sf;
+  return null;
+}
+
 async function financeSession(c: any, roles: Role[]) {
   // Check finance secret first
   const sf = await sessionFrom(c, c.env.FINANCE_JWT_SECRET);
@@ -629,8 +637,8 @@ export function registerExtras(app: App) {
   // ---------- Finance: approve (double-approve guard + payout sync) ----------
 
   app.post("/api/finance/submissions/:id/approve", async (c) => {
-    const session = await financeSession(c, ["finance_staff", "finance_lead"]);
-    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    const session = await financeStaffOnly(c);
+    if (!session) return c.json({ error: "Only Finance staff can approve claims. Admin cannot approve bills." }, 403);
 
     const id = c.req.param("id");
     const sub = await c.env.DB.prepare(`SELECT mobile_number, status FROM submissions WHERE id = ?`)

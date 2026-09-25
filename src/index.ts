@@ -384,8 +384,11 @@ app.get("/api/finance/submissions/:id/image", async (c) => {
 });
 
 app.post("/api/finance/submissions/:id/verify", async (c) => {
-  const session = await getAnySession(c);
-  if (!requireRole(session, ["admin", "finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
+  // Finance JWT only — admin cannot adjust verified quantities
+  const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
+  if (!requireRole(session, ["finance_staff", "finance_lead"])) {
+    return c.json({ error: "Only Finance staff can verify claim quantities. Admin cannot approve or adjust bills." }, 403);
+  }
 
   const id = c.req.param("id");
   const { items } = await c.req.json<{ items: { itemId: number; verifiedQty: number }[] }>();
@@ -412,8 +415,11 @@ app.post("/api/finance/submissions/:id/verify", async (c) => {
 });
 
 app.post("/api/finance/submissions/:id/reject", async (c) => {
-  const session = await getAnySession(c);
-  if (!requireRole(session, ["admin", "finance_staff", "finance_lead"])) return c.json({ error: "Unauthorized" }, 401);
+  // Finance JWT only — admin cannot reject bills
+  const session = await getSession(c, c.env.FINANCE_JWT_SECRET);
+  if (!requireRole(session, ["finance_staff", "finance_lead"])) {
+    return c.json({ error: "Only Finance staff can reject claims. Admin cannot reject bills." }, 403);
+  }
 
   const id = c.req.param("id");
   const { rejectionCode } = await c.req.json<{ rejectionCode: string }>();

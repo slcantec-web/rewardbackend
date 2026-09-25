@@ -1,14 +1,6 @@
-Bank-details invite link (copy / WhatsApp)
-==========================================
+Finance-only bill approval
+==========================
+Approve / reject / verify qty: finance_staff + finance_lead only.
+Admin tokens receive 403 on those endpoints.
 
-When a customer is payout-eligible but has no bank details:
-  Finance or Admin can click "Request bank details"
-  → generates a 7-day secure link on the claim portal
-  → Copy to clipboard, or type WA to open WhatsApp with message
-
-Customer opens:
-  https://rewards.cloudebase.dpdns.org/bank.html?token=...
-
-Requires CLAIM_PORTAL_URL in admin/config.js (already set).
-
-New file: public/bank.html
+Redeploy Worker (src/extras.ts + src/index.ts).
