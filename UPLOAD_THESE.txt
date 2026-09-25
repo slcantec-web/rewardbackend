@@ -1,18 +1,10 @@
-Payout threshold + track summary + device blueprint
-===================================================
+Customer master Excel — location optional, set GPS later
+========================================================
 
-1) Admin → Rates tab: adjust "Wallet payout threshold" (default 1000 LKR).
-   When a mobile's approved wallet balance reaches this, a PENDING payout appears.
+- Bulk Excel upload no longer needs GPS/location columns filled.
+- Download "Excel template" from Customers tab (location column blank).
+- After import, use "Set GPS" / "Edit GPS" on each customer row.
+- Paste Google Maps link OR lat,lng (e.g. 6.9271, 79.8612).
+- Type CLEAR in the GPS prompt to remove coordinates.
 
-2) Public: Submit claim + Track claims links on both pages.
-
-3) Track page: after lookup, shows summary of ALL claims under that mobile
-   (counts, approved/pending/rejected, LKR totals, list of submission IDs).
-
-4) Finance review: full mobile device blueprint on every submission
-   (OS, browser, model, screen, GPU, cores, device history class).
-
-Overwrite:
-  public/index.html, public/track.html, public/app.js
-  admin/index.html, admin/finance.html
-  src/index.ts, src/extras.ts
+Overwrite: admin/index.html, src/extras.ts

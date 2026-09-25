@@ -1185,8 +1185,9 @@ export function registerExtras(app: App) {
 
     const b = await c.req.json<any>();
     if (!b.name) return c.json({ error: "Customer name is required" }, 400);
+    // Location is optional — can be set later via Edit / Set GPS
     const { point, invalid } = await coordsFrom(b);
-    if (invalid) return c.json({ error: LOCATION_HELP }, 400);
+    const locationWarning = invalid ? LOCATION_HELP : null;
 
     const id = slugId("DLR", b.name);
     try {
@@ -1204,7 +1205,13 @@ export function registerExtras(app: App) {
       .bind(session.sub, "CREATE_DEALER", "dealer", id, JSON.stringify({ ...b, latitude: point?.lat, longitude: point?.lng }))
       .run();
 
-    return c.json({ ok: true, id, latitude: point?.lat ?? null, longitude: point?.lng ?? null });
+    return c.json({
+      ok: true,
+      id,
+      latitude: point?.lat ?? null,
+      longitude: point?.lng ?? null,
+      warning: locationWarning || (point ? null : "Saved without GPS — you can add location later from the customer list."),
+    });
   });
 
   app.patch("/api/admin/dealers/:id", async (c) => {
@@ -1213,27 +1220,62 @@ export function registerExtras(app: App) {
 
     const id = c.req.param("id");
     const b = await c.req.json<any>();
+    // Location optional: omit/blank = keep existing; clearLocation=true = wipe GPS; invalid non-empty = error
     const { point, invalid } = await coordsFrom(b);
     if (invalid) return c.json({ error: LOCATION_HELP }, 400);
 
-    await c.env.DB.prepare(
-      `UPDATE dealers SET
-         customer_code = COALESCE(?, customer_code), name = COALESCE(?, name), contact_phone = COALESCE(?, contact_phone),
-         address = COALESCE(?, address), city = COALESCE(?, city), latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude),
-         updated_at = datetime('now')
-       WHERE id = ?`
-    )
-      .bind(
-        b.customerCode || null, b.name || null, b.contactPhone || null, b.address || null, b.city || null,
-        point?.lat ?? null, point?.lng ?? null, id
+    const clearLoc = b.clearLocation === true;
+    let latBind: number | null | undefined = undefined;
+    let lngBind: number | null | undefined = undefined;
+    if (clearLoc) {
+      latBind = null;
+      lngBind = null;
+    } else if (point) {
+      latBind = point.lat;
+      lngBind = point.lng;
+    }
+
+    if (clearLoc) {
+      await c.env.DB.prepare(
+        `UPDATE dealers SET
+           customer_code = COALESCE(?, customer_code), name = COALESCE(?, name), contact_phone = COALESCE(?, contact_phone),
+           address = COALESCE(?, address), city = COALESCE(?, city), latitude = NULL, longitude = NULL,
+           updated_at = datetime('now')
+         WHERE id = ?`
       )
-      .run();
+        .bind(b.customerCode || null, b.name || null, b.contactPhone || null, b.address || null, b.city || null, id)
+        .run();
+    } else if (point) {
+      await c.env.DB.prepare(
+        `UPDATE dealers SET
+           customer_code = COALESCE(?, customer_code), name = COALESCE(?, name), contact_phone = COALESCE(?, contact_phone),
+           address = COALESCE(?, address), city = COALESCE(?, city), latitude = ?, longitude = ?,
+           updated_at = datetime('now')
+         WHERE id = ?`
+      )
+        .bind(
+          b.customerCode || null, b.name || null, b.contactPhone || null, b.address || null, b.city || null,
+          point.lat, point.lng, id
+        )
+        .run();
+    } else {
+      await c.env.DB.prepare(
+        `UPDATE dealers SET
+           customer_code = COALESCE(?, customer_code), name = COALESCE(?, name), contact_phone = COALESCE(?, contact_phone),
+           address = COALESCE(?, address), city = COALESCE(?, city),
+           updated_at = datetime('now')
+         WHERE id = ?`
+      )
+        .bind(b.customerCode || null, b.name || null, b.contactPhone || null, b.address || null, b.city || null, id)
+        .run();
+    }
 
     await c.env.DB.prepare(`INSERT INTO system_audit_log (actor, action, entity_type, entity_id, details_json) VALUES (?,?,?,?,?)`)
-      .bind(session.sub, "EDIT_DEALER", "dealer", id, JSON.stringify({ ...b, latitude: point?.lat, longitude: point?.lng }))
+      .bind(session.sub, "EDIT_DEALER", "dealer", id, JSON.stringify({ ...b, latitude: latBind, longitude: lngBind }))
       .run();
 
-    return c.json({ ok: true, latitude: point?.lat ?? null, longitude: point?.lng ?? null });
+    const row = await c.env.DB.prepare(`SELECT latitude, longitude FROM dealers WHERE id = ?`).bind(id).first<any>();
+    return c.json({ ok: true, latitude: row?.latitude ?? null, longitude: row?.longitude ?? null });
   });
 
   app.post("/api/admin/dealers/bulk", async (c) => {

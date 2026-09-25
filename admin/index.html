@@ -928,7 +928,7 @@
       <div class="form-group">
         <label>Location Coordinates or Google Maps Link</label>
         <input type="text" id="newCustLocation" placeholder="e.g. 6.9271, 79.8612 or maps.app.goo.gl/..." />
-        <div class="hint">Allows automatic GPS geofencing against fraud</div>
+        <div class="hint">Optional — leave blank on create/upload; use <b>Set GPS</b> later for geofencing</div>
       </div>
       <div id="newCustError" class="banner err"></div>
     </div>
@@ -1300,9 +1300,10 @@ function renderCustomersTable(dealers) {
         </span>
       </td>
       <td>
-        <div style="display:flex;gap:6px;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${d.contact_phone || d.id}')">Inspect</button>
           <button class="btn btn-secondary btn-sm" onclick='editCustomer(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Edit</button>
+          <button class="btn btn-primary btn-sm" onclick='setCustomerGps(${JSON.stringify({ id: d.id, name: d.name, latitude: d.latitude, longitude: d.longitude }).replace(/'/g, "&apos;")})'>${d.latitude != null ? "Edit GPS" : "Set GPS"}</button>
           ${d.active ? `<button class="btn btn-danger btn-sm" onclick="deleteCustomer('${d.id}')">Deactivate</button>` : ''}
         </div>
       </td>
@@ -1317,11 +1318,17 @@ function renderCustomersTable(dealers) {
       </div>
       <div class="page-header-actions">
         <button class="btn btn-primary" onclick="openAddCustomerModal()">+ Add New Customer</button>
+        <button class="btn btn-outline" onclick="downloadCustomerTemplate()">📄 Excel template</button>
         <label class="btn btn-secondary" style="cursor:pointer;">
           📥 Bulk Upload Excel (.xlsx)
           <input type="file" id="custExcelInput" accept=".xlsx,.xls,.csv" style="display:none;" />
         </label>
       </div>
+    </div>
+
+    <div class="banner" style="background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;margin-bottom:14px;padding:12px 14px;border-radius:8px;font-size:0.85rem;">
+      <b>Bulk upload tip:</b> Location / GPS is <b>optional</b>. Upload name, code, phone, city, address first.
+      Set Google Maps link or coordinates later with <b>Set GPS</b> on each row (geofencing is not required for import).
     </div>
 
     <!-- Search & Filter Bar -->
@@ -1393,9 +1400,10 @@ function filterCustomerTable() {
         </span>
       </td>
       <td>
-        <div style="display:flex;gap:6px;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${d.contact_phone || d.id}')">Inspect</button>
           <button class="btn btn-secondary btn-sm" onclick='editCustomer(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Edit</button>
+          <button class="btn btn-primary btn-sm" onclick='setCustomerGps(${JSON.stringify({ id: d.id, name: d.name, latitude: d.latitude, longitude: d.longitude }).replace(/'/g, "&apos;")})'>${d.latitude != null ? "Edit GPS" : "Set GPS"}</button>
           ${d.active ? `<button class="btn btn-danger btn-sm" onclick="deleteCustomer('${d.id}')">Deactivate</button>` : ''}
         </div>
       </td>
@@ -1445,8 +1453,10 @@ async function submitCreateCustomer() {
       return;
     }
     closeAddCustomerModal();
+    if (data.warning) {
+      alert("Customer saved.\n" + data.warning);
+    }
     loadCustomers();
-    // Also update summaries count
     updateHeaderCounts();
   } catch (err) {
     errEl.className = "banner err";
@@ -1458,14 +1468,70 @@ async function editCustomer(dealer) {
   const name = prompt("Customer name:", dealer.name);
   if (name === null) return;
   const contactPhone = prompt("Contact phone:", dealer.contact_phone || "");
+  if (contactPhone === null) return;
   const city = prompt("City:", dealer.city || "");
-  const location = prompt("Location link or coordinates (lat, lng):", dealer.latitude ? `${dealer.latitude}, ${dealer.longitude}` : "");
+  if (city === null) return;
+  // Location edited separately via Set GPS (easier, optional)
 
-  await fetch(`${API_BASE}/api/admin/dealers/${dealer.id}`, {
+  const res = await fetch(`${API_BASE}/api/admin/dealers/${dealer.id}`, {
     method: "PATCH", headers: authHeaders(),
-    body: JSON.stringify({ name, contactPhone: contactPhone || null, city: city || null, location: location || undefined })
+    body: JSON.stringify({ name, contactPhone: contactPhone || null, city: city || null })
   });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.error || "Update failed");
+    return;
+  }
   loadCustomers();
+}
+
+async function setCustomerGps(dealer) {
+  const current = dealer.latitude != null && dealer.longitude != null
+    ? `${dealer.latitude}, ${dealer.longitude}`
+    : "";
+  const location = prompt(
+    `GPS for "${dealer.name || dealer.id}"\n\nPaste Google Maps link OR coordinates (lat, lng).\nLeave empty and OK to cancel. Type CLEAR to remove GPS.`,
+    current
+  );
+  if (location === null) return;
+  const trimmed = location.trim();
+  if (!trimmed) return;
+
+  const body = trimmed.toUpperCase() === "CLEAR"
+    ? { clearLocation: true }
+    : { location: trimmed };
+
+  const res = await fetch(`${API_BASE}/api/admin/dealers/${dealer.id}`, {
+    method: "PATCH", headers: authHeaders(), body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    alert(data.error || "Could not save GPS. Use maps link or e.g. 6.9271, 79.8612");
+    return;
+  }
+  alert(data.latitude != null
+    ? `GPS saved: ${Number(data.latitude).toFixed(5)}, ${Number(data.longitude).toFixed(5)}`
+    : "GPS cleared for this customer.");
+  loadCustomers();
+}
+
+function downloadCustomerTemplate() {
+  // Location column optional — leave blank; set GPS later in Admin
+  const rows = [
+    { customerCode: "C001", name: "Example Hardware Store", contactPhone: "0771234567", city: "Colombo", address: "142 Main Street", location: "" },
+    { customerCode: "C002", name: "Second Shop (no GPS yet)", contactPhone: "0779876543", city: "Kandy", address: "", location: "" },
+  ];
+  if (typeof XLSX === "undefined") {
+    // CSV fallback
+    const header = "customerCode,name,contactPhone,city,address,location";
+    const lines = rows.map(r => [r.customerCode, r.name, r.contactPhone, r.city, r.address, r.location].map(v => `"${v}"`).join(","));
+    downloadFile(header + "\n" + lines.join("\n"), "customer_master_template.csv", "text/csv");
+    return;
+  }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Customers");
+  XLSX.writeFile(wb, "customer_master_template.xlsx");
 }
 
 async function deleteCustomer(id) {
@@ -2647,13 +2713,14 @@ function handleBulkUpload(event, kind) {
 
       const rows = kind === "dealers"
         ? raw.map(r => ({
-            customerCode: String(r.customerCode || r.CustomerCode || "").trim(),
-            name: String(r.name || r.Name || "").trim(),
-            contactPhone: String(r.contactPhone || r.ContactPhone || "").trim() || undefined,
+            customerCode: String(r.customerCode || r.CustomerCode || r["Customer Code"] || "").trim(),
+            name: String(r.name || r.Name || r["Customer Name"] || r["Dealer Name"] || "").trim(),
+            contactPhone: String(r.contactPhone || r.ContactPhone || r.Phone || r.phone || "").trim() || undefined,
             address: String(r.address || r.Address || "").trim() || undefined,
             city: String(r.city || r.City || "").trim() || undefined,
-            location: String(r.location || r.Location || r.mapsLink || "").trim() || undefined,
-          }))
+            // location optional — leave blank in Excel; set GPS later in Admin
+            location: String(r.location || r.Location || r.mapsLink || r.GPS || r.gps || "").trim() || undefined,
+          })).filter(r => r.name)
         : raw.map(r => ({
             itemCode: String(r.itemCode || r.ItemCode || "").trim(),
             name: String(r.name || r.Name || "").trim(),
@@ -2667,7 +2734,13 @@ function handleBulkUpload(event, kind) {
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || "Upload failed"); return; }
-      alert(`Success: Created ${data.created || 0}, Updated ${data.updated || 0}`);
+      const warnList = (data.warnings || []).slice(0, 8).map(w => `Row ${w.row}: ${w.warning}`).join("\n");
+      const errList = (data.errors || []).slice(0, 8).map(e => `Row ${e.row}: ${e.error}`).join("\n");
+      let msg = `Import done.\nCreated: ${data.created || 0}\nUpdated: ${data.updated || 0}`;
+      if (errList) msg += `\n\nErrors:\n${errList}`;
+      if (warnList) msg += `\n\nNotes (GPS skipped — set later via Set GPS):\n${warnList}`;
+      if (kind === "dealers") msg += "\n\nTip: Location is optional. Use Set GPS on any customer row to add maps link later.";
+      alert(msg);
       if (kind === "dealers") {
         loadCustomers();
         updateHeaderCounts();
