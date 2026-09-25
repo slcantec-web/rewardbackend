@@ -1,1 +1,1 @@
-Sample Excel at Customers: Download sample Excel button. Redeploy Admin Pages.
+FIX: products + dealer suggestions load on desktop too; only submit is mobile-blocked. Redeploy Claim Pages public/app.js

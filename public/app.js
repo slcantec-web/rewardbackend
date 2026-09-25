@@ -99,18 +99,25 @@ function captureDeviceBlueprint() {
 async function init() {
   document.getElementById("timeStatus").textContent = new Date().toLocaleString();
 
-
-  if (blockIfDesktop()) return;
-
-  requestLocation();
-  await loadProducts();
-  // dealer suggestions load as user types
+  // Always wire UI (search + products). Desktop only blocks *submission*, not browsing.
+  const onDesktop = blockIfDesktop();
 
   setupDealerAutocomplete();
-  document.getElementById("uploadBox").addEventListener("click", () => document.getElementById("billFileInput").click());
-  document.getElementById("billFileInput").addEventListener("change", handleFileSelect);
-  document.getElementById("mobileInput").addEventListener("input", validateForm);
-  document.getElementById("submitBtn").addEventListener("click", submitClaim);
+  document.getElementById("uploadBox")?.addEventListener("click", () => document.getElementById("billFileInput").click());
+  document.getElementById("billFileInput")?.addEventListener("change", handleFileSelect);
+  document.getElementById("mobileInput")?.addEventListener("input", validateForm);
+  document.getElementById("submitBtn")?.addEventListener("click", submitClaim);
+
+  try {
+    await loadProducts();
+  } catch (e) {
+    const list = document.getElementById("productList");
+    if (list) list.innerHTML = `<div style="color:#b91c1c;font-size:0.88rem;padding:8px 0;">Could not load products. Check connection and try again.</div>`;
+  }
+
+  if (!onDesktop) {
+    requestLocation();
+  }
 }
 
 function requestLocation() {
@@ -139,14 +146,22 @@ function requestLocation() {
 }
 
 async function loadProducts() {
+  const list = document.getElementById("productList");
+  if (list) list.innerHTML = `<div style="color:var(--muted);font-size:0.85rem;">Loading products…</div>`;
   const res = await fetch(`${API_BASE}/api/products`);
+  if (!res.ok) throw new Error("products " + res.status);
   const data = await res.json();
   products = data.products || [];
+  if (!products.length) {
+    if (list) list.innerHTML = `<div style="color:var(--muted);font-size:0.85rem;">No products configured yet.</div>`;
+    return;
+  }
   renderProducts();
 }
 
 function renderProducts() {
   const list = document.getElementById("productList");
+  if (!list) return;
   list.innerHTML = "";
   products.forEach((p) => {
     quantities[p.id] = quantities[p.id] || 0;
@@ -186,20 +201,24 @@ function setupDealerAutocomplete() {
     const q = input.value.trim();
     dealerHighlight = -1;
     if (selectedDealerId) {
-      // typing again clears selection
       selectedDealerId = null;
       document.getElementById("dealerSelected")?.classList.remove("visible");
       validateForm();
     }
     clearTimeout(dealerSearchTimer);
-    if (q.length < 1) {
-      box.classList.remove("open");
-      box.innerHTML = "";
-      return;
-    }
     box.innerHTML = `<div class="dealer-sug-empty">Searching…</div>`;
     box.classList.add("open");
-    dealerSearchTimer = setTimeout(() => searchDealers(q), 220);
+    // Empty query → show a starter list; otherwise filter by name/code/city/address
+    dealerSearchTimer = setTimeout(() => searchDealers(q), 200);
+  });
+
+  input.addEventListener("focus", () => {
+    const q = input.value.trim();
+    if (!selectedDealerId) {
+      box.innerHTML = `<div class="dealer-sug-empty">Searching…</div>`;
+      box.classList.add("open");
+      searchDealers(q);
+    }
   });
 
   input.addEventListener("keydown", (e) => {
