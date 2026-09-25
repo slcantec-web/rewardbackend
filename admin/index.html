@@ -1348,7 +1348,7 @@ function renderCustomersTable(dealers) {
           <thead>
             <tr>
               <th>Code</th>
-              <th>Customer / Dealer Name</th>
+              <th>Account (type shown)</th>
               <th>Contact Phone</th>
               <th>City</th>
               <th>Geofence</th>
@@ -1579,10 +1579,14 @@ async function deleteCustomer(id) {
 // Solves "newly created customer summary details are not loading"
 // =============================================================
 let cachedSummariesData = [];
-let summariesFilter = "ALL";
+let summariesFilter = "END_CUSTOMERS";
 
 
 async function shareBankInviteAdmin(mobile) {
+  if (!mobile || mobile === "—" || mobile === "undefined") {
+    alert("Bank details invites are only for end customers with a mobile number (not dealer master accounts).");
+    return;
+  }
   try {
     const res = await fetch(`${API_BASE}/api/admin/bank-invite`, {
       method: "POST", headers: authHeaders(), body: JSON.stringify({ mobile })
@@ -1627,12 +1631,17 @@ function renderSummariesView(data) {
   const totals = data.totals || {};
   const threshold = data.threshold || 1000;
 
+  const endCount = cachedSummariesData.filter(c => !c.is_dealer).length;
+  const dealerCount = cachedSummariesData.filter(c => c.is_dealer).length;
+
   const filtered = cachedSummariesData.filter(c => {
-    if (summariesFilter === "DEALERS") return c.is_dealer;
-    if (summariesFilter === "ELIGIBLE") return c.payout_eligible;
-    if (summariesFilter === "BANK") return c.has_bank;
-    if (summariesFilter === "PENDING_PAYOUT") return c.pending_payout_count > 0;
-    return true;
+    if (summariesFilter === "END_CUSTOMERS") return !c.is_dealer;
+    if (summariesFilter === "DEALERS") return !!c.is_dealer;
+    if (summariesFilter === "ELIGIBLE") return !c.is_dealer && c.payout_eligible;
+    if (summariesFilter === "BANK") return !c.is_dealer && c.has_bank;
+    if (summariesFilter === "PENDING_PAYOUT") return !c.is_dealer && c.pending_payout_count > 0;
+    if (summariesFilter === "ALL") return true;
+    return !c.is_dealer;
   });
 
   const rows = filtered.map(c => {
@@ -1640,7 +1649,12 @@ function renderSummariesView(data) {
     return `
       <tr>
         <td>
-          <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">${c.dealer_name}</b>
+          <div style="margin-bottom:4px;">
+            ${c.is_dealer
+              ? `<span class="chip chip-indigo"><span class="chip-dot"></span>Dealer</span>`
+              : `<span class="chip chip-success"><span class="chip-dot"></span>End customer</span>`}
+          </div>
+          <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">${c.dealer_name || c.mobile_number || '—'}</b>
           ${c.customer_code && c.customer_code !== '—' ? `<div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${c.customer_code}</div>` : ''}
         </td>
         <td class="mono">
@@ -1661,7 +1675,10 @@ function renderSummariesView(data) {
           LKR ${(c.wallet_balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
         </td>
         <td>
-          ${c.has_bank ? `
+          ${c.is_dealer ? `
+            <span class="chip chip-muted"><span class="chip-dot"></span>Dealer account</span>
+            <div style="font-size:0.72rem;color:var(--text-muted);">Bank invite not used for dealers</div>
+          ` : c.has_bank ? `
             <span class="chip chip-success"><span class="chip-dot"></span>Bank Saved</span>
             <div style="font-size:0.72rem;color:var(--text-muted);">${c.bank_name || ''}</div>
           ` : `
@@ -1680,7 +1697,7 @@ function renderSummariesView(data) {
         </td>
         <td style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">View Profile</button>
-          ${!c.has_bank && (c.mobile_number || c.mobile) ? `<button class="btn btn-primary btn-sm" onclick="shareBankInviteAdmin('${c.mobile_number || c.mobile}')">Request bank</button>` : ''}
+          ${!c.is_dealer && !c.has_bank && (c.mobile_number || c.mobile) ? `<button class="btn btn-primary btn-sm" onclick="shareBankInviteAdmin('${c.mobile_number || c.mobile}')">Request bank</button>` : ''}
         </td>
       </tr>
     `;
@@ -1690,7 +1707,7 @@ function renderSummariesView(data) {
     <div class="page-header">
       <div class="page-header-info">
         <h1>Customer Intelligence &amp; Summaries Ledger</h1>
-        <p>Complete 360° financial dossier across retail stores, newly registered dealers, and consumer claimants.</p>
+        <p>End customers (claimants) and dealers (stores) are listed separately. Bank detail requests apply only to end customers.</p>
       </div>
       <div class="page-header-actions">
         <button class="btn btn-secondary btn-sm" onclick="loadCustomerSummaries()">🔄 Refresh Ledger</button>
@@ -1724,11 +1741,12 @@ function renderSummariesView(data) {
     <!-- Filter Toolbar -->
     <div class="toolbar">
       <div class="pill-filter-group">
-        <button class="pill-filter-btn ${summariesFilter === 'ALL' ? 'active' : ''}" onclick="setSummariesFilter('ALL')">All Accounts (${cachedSummariesData.length})</button>
-        <button class="pill-filter-btn ${summariesFilter === 'DEALERS' ? 'active' : ''}" onclick="setSummariesFilter('DEALERS')">Retail Dealers Only</button>
-        <button class="pill-filter-btn ${summariesFilter === 'ELIGIBLE' ? 'active' : ''}" onclick="setSummariesFilter('ELIGIBLE')">Eligible for Payout (≥ ${threshold})</button>
-        <button class="pill-filter-btn ${summariesFilter === 'BANK' ? 'active' : ''}" onclick="setSummariesFilter('BANK')">Bank Saved</button>
-        <button class="pill-filter-btn ${summariesFilter === 'PENDING_PAYOUT' ? 'active' : ''}" onclick="setSummariesFilter('PENDING_PAYOUT')">In Payout Batch</button>
+        <button class="pill-filter-btn ${summariesFilter === 'END_CUSTOMERS' ? 'active' : ''}" onclick="setSummariesFilter('END_CUSTOMERS')">End customers (${endCount})</button>
+        <button class="pill-filter-btn ${summariesFilter === 'DEALERS' ? 'active' : ''}" onclick="setSummariesFilter('DEALERS')">Dealers / stores (${dealerCount})</button>
+        <button class="pill-filter-btn ${summariesFilter === 'ELIGIBLE' ? 'active' : ''}" onclick="setSummariesFilter('ELIGIBLE')">Eligible payout</button>
+        <button class="pill-filter-btn ${summariesFilter === 'BANK' ? 'active' : ''}" onclick="setSummariesFilter('BANK')">Bank saved</button>
+        <button class="pill-filter-btn ${summariesFilter === 'PENDING_PAYOUT' ? 'active' : ''}" onclick="setSummariesFilter('PENDING_PAYOUT')">In payout batch</button>
+        <button class="pill-filter-btn ${summariesFilter === 'ALL' ? 'active' : ''}" onclick="setSummariesFilter('ALL')">All (${cachedSummariesData.length})</button>
       </div>
       <div class="search-wrapper">
         <input type="text" id="summariesSearchInput" placeholder="🔍 Search by name, code, mobile, or city…" oninput="filterSummariesLive()" />
@@ -1746,7 +1764,7 @@ function renderSummariesView(data) {
               <th>Submissions</th>
               <th>Approved LKR</th>
               <th>Wallet Balance</th>
-              <th>Bank Account</th>
+              <th>Bank (end customers)</th>
               <th>Payout Status</th>
               <th>Action</th>
             </tr>
@@ -1768,6 +1786,12 @@ function setSummariesFilter(filter) {
 function filterSummariesLive() {
   const q = document.getElementById("summariesSearchInput").value.trim().toLowerCase();
   const filtered = cachedSummariesData.filter(c => {
+    if (summariesFilter === "END_CUSTOMERS" && c.is_dealer) return false;
+    if (summariesFilter === "DEALERS" && !c.is_dealer) return false;
+    if (summariesFilter === "ELIGIBLE" && (c.is_dealer || !c.payout_eligible)) return false;
+    if (summariesFilter === "BANK" && (c.is_dealer || !c.has_bank)) return false;
+    if (summariesFilter === "PENDING_PAYOUT" && (c.is_dealer || !(c.pending_payout_count > 0))) return false;
+    if (!q) return true;
     return (c.dealer_name || "").toLowerCase().includes(q) ||
            (c.customer_code || "").toLowerCase().includes(q) ||
            (c.mobile_number || "").toLowerCase().includes(q) ||
@@ -1782,7 +1806,12 @@ function filterSummariesLive() {
   tbody.innerHTML = filtered.map(c => `
     <tr>
       <td>
-        <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">${c.dealer_name}</b>
+        <div style="margin-bottom:4px;">
+          ${c.is_dealer
+            ? `<span class="chip chip-indigo"><span class="chip-dot"></span>Dealer</span>`
+            : `<span class="chip chip-success"><span class="chip-dot"></span>End customer</span>`}
+        </div>
+        <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">${c.dealer_name || c.mobile_number || '—'}</b>
         ${c.customer_code && c.customer_code !== '—' ? `<div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${c.customer_code}</div>` : ''}
       </td>
       <td class="mono">
@@ -1803,7 +1832,9 @@ function filterSummariesLive() {
         LKR ${(c.wallet_balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
       </td>
       <td>
-        ${c.has_bank ? `
+        ${c.is_dealer ? `
+          <span class="chip chip-muted"><span class="chip-dot"></span>Dealer account</span>
+        ` : c.has_bank ? `
           <span class="chip chip-success"><span class="chip-dot"></span>Bank Saved</span>
         ` : `
           <span class="chip chip-warning"><span class="chip-dot"></span>No Bank</span>
