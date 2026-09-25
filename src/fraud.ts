@@ -33,6 +33,8 @@ export async function perceptualHashFromBytes(bytes: Uint8Array): Promise<string
  * Derives a stable device fingerprint hash from the client-submitted blueprint.
  */
 export async function deviceFingerprintHash(device: DeviceBlueprint): Promise<string> {
+  // Stable material only — no timestamps / random values.
+  // installId (localStorage) strengthens uniqueness when canvas is blocked or identical hardware collides.
   const material = JSON.stringify({
     ua: device.userAgent,
     platform: device.platform,
@@ -42,6 +44,7 @@ export async function deviceFingerprintHash(device: DeviceBlueprint): Promise<st
     mem: device.deviceMemory,
     gl: device.webglRenderer,
     canvas: device.canvasFingerprint,
+    installId: (device as any).installId || null,
   });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(material));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -58,10 +61,12 @@ export interface FraudCheckInput {
   createdAtServer: string;
   deviceHash: string;
   imageHash: string;
+  /** Contact number on this claim — used to detect same device + different mobiles */
+  mobileNumber?: string;
 }
 
 export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvaluation> {
-  const { env, db, dealerLat, dealerLng, gpsLat, gpsLng, createdAtClient, createdAtServer, deviceHash, imageHash } =
+  const { env, db, dealerLat, dealerLng, gpsLat, gpsLng, createdAtClient, createdAtServer, deviceHash, imageHash, mobileNumber } =
     input;
 
   const flags: string[] = [];
@@ -117,7 +122,39 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
     riskScore += 30;
   }
 
+  // --- Layer 4: same device blueprint used with a different contact number ---
+  // Accurate enough for reward abuse: one phone repeatedly claiming under many mobiles.
+  // Same mobile re-submitting on the same device is allowed.
+  let multiMobileDevice = false;
+  if (deviceHash && mobileNumber) {
+    const otherMobiles = await db
+      .prepare(
+        `SELECT COUNT(DISTINCT mobile_number) AS cnt
+         FROM submissions
+         WHERE device_fingerprint_hash = ?
+           AND mobile_number IS NOT NULL
+           AND mobile_number != ?
+           AND length(trim(mobile_number)) > 0`
+      )
+      .bind(deviceHash, mobileNumber)
+      .first<{ cnt: number }>();
+    if ((otherMobiles?.cnt ?? 0) > 0) {
+      multiMobileDevice = true;
+      flags.push("FLAG_DEVICE_MULTI_MOBILE");
+      riskScore += 70;
+    }
+  }
+
   riskScore = Math.min(100, riskScore);
 
-  return { distanceKm, geographicMismatch, timeDeltaSeconds, highVelocity, duplicateImage, riskScore, flags };
+  return {
+    distanceKm,
+    geographicMismatch,
+    timeDeltaSeconds,
+    highVelocity,
+    duplicateImage,
+    multiMobileDevice,
+    riskScore,
+    flags,
+  };
 }

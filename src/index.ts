@@ -151,7 +151,22 @@ app.post("/api/submissions", async (c) => {
     createdAtServer: nowIso,
     deviceHash,
     imageHash,
+    mobileNumber: payload.mobileNumber,
   });
+
+  // Hard block: same phone blueprint already used with a different contact number
+  if (fraud.multiMobileDevice) {
+    return c.json(
+      {
+        error:
+          "This phone was already used to submit claims with a different contact number. " +
+          "Each mobile number must use its own phone. If this is your number, contact support.",
+        code: "DEVICE_MULTI_MOBILE",
+        flags: fraud.flags,
+      },
+      403
+    );
+  }
 
   // --- Resolve current payout rates & compute claimed reward ---
   let totalClaimed = 0;

@@ -1,15 +1,21 @@
-CanTec Rewards — Admin cannot reject bills (clear notify)
+CanTec Rewards — Same phone + different contact number = block
 
-WHAT CHANGED (admin/finance.html only for this fix)
-- Admin no longer sees Approve / Reject buttons on pending claims
-- Yellow notice: "Admin view only — Finance staff process claims"
-- If reject/approve is still triggered as admin → clear alert (not silent fail)
-- API error messages shown in the alert (e.g. "Only Finance staff can reject…")
+ACCURACY
+Yes — device blueprint is a practical way to catch one phone submitting under many mobiles.
+We also fixed an unstable canvas fingerprint (was using Math.random every load) and added a
+stable localStorage installId so the same browser stays linked reliably.
 
-Backend already returned 403 for admin reject/approve — UI was failing silently.
+BEHAVIOUR
+- Same device fingerprint + different mobile than prior claims → claim blocked (HTTP 403)
+- Same device + same mobile (repeat claims) → allowed
+- Customer sees a clear red banner on the claim form (not a silent fail)
 
-UPLOAD: Cloudflare Pages → Admin project → admin/finance.html
-(Worker not required for this fix)
+UPLOAD
+1) Worker (src/):
+   - src/fraud.ts   (NEW in this package if missing on Worker)
+   - src/types.ts
+   - src/index.ts
+2) Claim Portal Pages (public/):
+   - public/app.js
 
-Also includes previous login fix files if you need a full admin refresh:
-  admin/login.html, admin/index.html, admin/config.js
+Admin Pages — not required for this change.

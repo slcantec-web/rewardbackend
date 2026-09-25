@@ -55,15 +55,37 @@ function blockIfDesktop() {
 // ============================================================
 // Device blueprint capture
 // ============================================================
+function getOrCreateInstallId() {
+  // Stable per-browser id — survives page reloads; cleared only if user wipes site data.
+  const KEY = "cantec_device_id";
+  try {
+    let id = localStorage.getItem(KEY);
+    if (!id) {
+      id = (crypto.randomUUID && crypto.randomUUID()) ||
+        ("id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10));
+      localStorage.setItem(KEY, id);
+    }
+    return id;
+  } catch (e) {
+    return null;
+  }
+}
+
 function captureDeviceBlueprint() {
+  // Canvas text must be CONSTANT — Math.random() made fingerprints change every load (unusable).
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   let canvasFingerprint = "";
   try {
+    canvas.width = 240;
+    canvas.height = 40;
     ctx.textBaseline = "top";
     ctx.font = "14px Arial";
-    ctx.fillText("device-check-" + Math.random(), 2, 2);
-    canvasFingerprint = canvas.toDataURL().slice(-64);
+    ctx.fillStyle = "#0f766e";
+    ctx.fillRect(0, 0, 240, 40);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("CanTec-device-fp-v1", 4, 12);
+    canvasFingerprint = canvas.toDataURL().slice(-96);
   } catch (e) { /* canvas blocked — non-fatal */ }
 
   let webglRenderer = "";
@@ -90,6 +112,7 @@ function captureDeviceBlueprint() {
     webglRenderer,
     canvasFingerprint,
     connectionType: navigator.connection ? navigator.connection.effectiveType : null,
+    installId: getOrCreateInstallId(),
   };
 }
 
@@ -417,8 +440,15 @@ async function submitClaim() {
         `with this mobile + tracking ID and <b>add your bank account</b> (one mobile = one bank account, required for payout).`;
     } else {
       banner.className = "result-banner err";
-      const msg = data.error || (data.flags || []).join(", ") || "see support";
-      banner.innerHTML = `⚠️ Claim could not be accepted (${msg}).`;
+      if (data.code === "DEVICE_MULTI_MOBILE" || (data.flags || []).includes("FLAG_DEVICE_MULTI_MOBILE")) {
+        banner.innerHTML =
+          `⚠️ <b>This phone is already linked to another contact number.</b><br>` +
+          `You cannot submit claims for a different number from the same device.<br>` +
+          `Use the original mobile number for this phone, or contact CanTec support if you need help.`;
+      } else {
+        const msg = data.error || (data.flags || []).join(", ") || "see support";
+        banner.innerHTML = `⚠️ Claim could not be accepted (${msg}).`;
+      }
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (e) {

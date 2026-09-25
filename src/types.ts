@@ -38,6 +38,10 @@ export interface DeviceBlueprint {
   webglRenderer?: string;
   canvasFingerprint?: string;
   connectionType?: string;
+  /** Stable per-browser install id (localStorage) — strengthens device binding */
+  installId?: string;
+  maxTouchPoints?: number;
+  isMobile?: boolean;
 }
 
 export interface SubmissionItemInput {
@@ -62,6 +66,8 @@ export interface FraudEvaluation {
   timeDeltaSeconds: number;
   highVelocity: boolean;
   duplicateImage: boolean;
+  /** True when this device fingerprint already submitted under a different mobile number */
+  multiMobileDevice: boolean;
   riskScore: number;
   flags: string[];
 }
