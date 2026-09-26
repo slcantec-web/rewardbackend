@@ -434,9 +434,134 @@
     max-width: 400px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25);
   }
+
+  /* Mark Paid modal — same authority as admin (ERP + bank/self reference) */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(15, 23, 42, 0.55);
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal-dialog {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 440px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .modal-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .btn-close {
+    border: none;
+    background: transparent;
+    font-size: 1.4rem;
+    line-height: 1;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 4px 8px;
+  }
+  .btn-close:hover { color: #0f172a; }
+  .modal-body { padding: 22px; }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 22px;
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+  }
+  .modal-body .form-group { margin-bottom: 14px; }
+  .modal-body .form-group label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #475569;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .modal-body .form-group input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+  .modal-body .form-group input:focus {
+    outline: none;
+    border-color: #0f766e;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+  }
+  .modal-body .form-group .hint {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 4px;
+  }
+  .banner {
+    display: none;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+  .banner.err {
+    display: block;
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+  }
 </style>
 </head>
 <body>
+
+<!-- Modal: Bind ERP + Bank/Self reference & Mark Paid (full finance authority) -->
+<div class="modal-overlay" id="payoutModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title">Process &amp; Settle Payout</h3>
+      <button type="button" class="btn-close" onclick="closeFinancePayoutModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.85rem;color:#64748b;margin:0 0 16px;">
+        Enter both references to mark this batch as <b>PAID</b>. The customer wallet is deducted automatically.
+      </p>
+      <div class="form-group">
+        <label>ERP Payment Voucher Reference *</label>
+        <input type="text" id="modalErpRef" placeholder="e.g. ERP-PAY-2026-001" autocomplete="off" />
+        <div class="hint">Corporate ERP voucher / payment document number</div>
+      </div>
+      <div class="form-group">
+        <label>Bank / Self Transfer Reference *</label>
+        <input type="text" id="modalBankRef" placeholder="e.g. CEFT-8849201" autocomplete="off" />
+        <div class="hint">Bank CEFT, cheque, or internal settlement reference</div>
+      </div>
+      <div id="modalPayoutError" class="banner"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeFinancePayoutModal()">Cancel</button>
+      <button type="button" class="btn btn-primary" id="btnConfirmFinancePayout">Confirm Bank Payment</button>
+    </div>
+  </div>
+</div>
 
 <!-- Main Finance Interface (auth required — unauthenticated users go to login.html) -->
 <div id="app" style="display:flex;height:100vh;flex-direction:column;">
@@ -1243,28 +1368,60 @@ async function loadPayoutsView() {
   }
 }
 
-async function bindFinancePayout(id) {
-  const erp = prompt("Enter ERP Payment Voucher reference (e.g. ERP-VOUCH-2026-09):", `ERP-${Date.now().toString().slice(-6)}`);
-  if (!erp) return;
-  const bank = prompt("Enter Bank Transfer / CEFT transaction ID:", `CEFT-${Math.floor(100000 + Math.random() * 900000)}`);
-  if (!bank) return;
+let activeFinancePayoutId = null;
 
-  try {
-    const res = await fetch(`${API_BASE}/api/finance/payouts/${id}/bind`, {
-      method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ erpReference: erp, bankReference: bank })
-    });
-    if (res.ok) {
-      alert("Payout marked as PAID!");
-      loadPayoutsView();
-    } else {
-      const data = await res.json();
-      alert(data.error || "Failed to mark payout.");
-    }
-  } catch (err) {
-    alert("Error: " + err.message);
-  }
+function bindFinancePayout(id) {
+  // Full authority: both ERP + bank/self reference (same as admin modal — not a single ERP prompt)
+  activeFinancePayoutId = id;
+  document.getElementById("modalErpRef").value = `ERP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  document.getElementById("modalBankRef").value = `CEFT-${Math.floor(100000 + Math.random() * 900000)}`;
+  const errEl = document.getElementById("modalPayoutError");
+  errEl.className = "banner";
+  errEl.textContent = "";
+  document.getElementById("payoutModal").classList.add("active");
+  setTimeout(() => document.getElementById("modalErpRef").focus(), 50);
 }
+
+function closeFinancePayoutModal() {
+  document.getElementById("payoutModal").classList.remove("active");
+  activeFinancePayoutId = null;
+}
+
+document.getElementById("btnConfirmFinancePayout")?.addEventListener("click", async () => {
+  if (!activeFinancePayoutId) return;
+  const erpReference = document.getElementById("modalErpRef").value.trim();
+  const bankReference = document.getElementById("modalBankRef").value.trim();
+  const msg = document.getElementById("modalPayoutError");
+
+  if (!erpReference || !bankReference) {
+    msg.className = "banner err";
+    msg.textContent = "Both ERP voucher and Bank / Self transfer reference are required.";
+    return;
+  }
+
+  const btn = document.getElementById("btnConfirmFinancePayout");
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/finance/payouts/${activeFinancePayoutId}/bind`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ erpReference, bankReference }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      msg.className = "banner err";
+      msg.textContent = data.error || "Failed to mark payout as paid.";
+      return;
+    }
+    closeFinancePayoutModal();
+    loadPayoutsView();
+  } catch (err) {
+    msg.className = "banner err";
+    msg.textContent = err.message || "Network error";
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 async function rebuildFinanceWallets() {
   if (!confirm("Rebuild all customer wallets from approved claims?")) return;
