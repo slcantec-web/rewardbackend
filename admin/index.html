@@ -1017,6 +1017,92 @@
 </div>
 
 
+
+<!-- Modal: Edit Customer / Dealer -->
+<div class="modal-overlay" id="editCustomerModal">
+  <div class="modal-dialog" style="max-width:520px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Customer Master</h3>
+      <button class="btn-close" onclick="closeEditCustomerModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editCustId" />
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Store / Customer Name *</label>
+        <input type="text" id="editCustName" placeholder="e.g. Colombo Central Hardware" />
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Contact Phone / Mobile</label>
+          <input type="text" id="editCustPhone" placeholder="e.g. 0771234567" />
+        </div>
+        <div class="form-group">
+          <label>City / Region</label>
+          <input type="text" id="editCustCity" placeholder="e.g. Colombo" />
+        </div>
+      </div>
+      <div id="editCustError" class="banner err"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeEditCustomerModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditCustomer()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Set / Edit GPS -->
+<div class="modal-overlay" id="editGpsModal">
+  <div class="modal-dialog" style="max-width:480px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Set GPS Location</h3>
+      <button class="btn-close" onclick="closeEditGpsModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editGpsId" />
+      <p id="editGpsSubtitle" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:14px;"></p>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Google Maps link or coordinates (lat, lng)</label>
+        <input type="text" id="editGpsLocation" placeholder="e.g. 6.9271, 79.8612 or maps.app.goo.gl/..." />
+        <div class="hint">Paste a maps link or enter lat, lng. Leave blank and save to cancel.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('editGpsLocation').value='CLEAR'">Clear GPS</button>
+      </div>
+      <div id="editGpsError" class="banner err"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeEditGpsModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditGps()">Save GPS</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit Product Item -->
+<div class="modal-overlay" id="editItemModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Product Item</h3>
+      <button class="btn-close" onclick="closeEditItemModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editItemId" />
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Product Name *</label>
+        <input type="text" id="editItemName" placeholder="e.g. CanTec Wall Putty 25kg" />
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Unit Packaging</label>
+        <input type="text" id="editItemUnit" placeholder="bag / bucket / drum" />
+      </div>
+      <div id="editItemError" class="banner err"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeEditItemModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditItem()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- Native toast stack (app-style notifications) -->
 <div id="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
@@ -1502,56 +1588,109 @@ async function submitCreateCustomer() {
   }
 }
 
-async function editCustomer(dealer) {
-  const name = prompt("Customer name:", dealer.name);
-  if (name === null) return;
-  const contactPhone = prompt("Contact phone:", dealer.contact_phone || "");
-  if (contactPhone === null) return;
-  const city = prompt("City:", dealer.city || "");
-  if (city === null) return;
-  // Location edited separately via Set GPS (easier, optional)
-
-  const res = await fetch(`${API_BASE}/api/admin/dealers/${dealer.id}`, {
-    method: "PATCH", headers: authHeaders(),
-    body: JSON.stringify({ name, contactPhone: contactPhone || null, city: city || null })
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    showToast(data.error || "Update failed", "error");
-    return;
-  }
-  showToast("Customer updated successfully.", "success");
-  loadCustomers();
+function openEditCustomerModal(dealer) {
+  document.getElementById("editCustId").value = dealer.id;
+  document.getElementById("editCustName").value = dealer.name || "";
+  document.getElementById("editCustPhone").value = dealer.contact_phone || "";
+  document.getElementById("editCustCity").value = dealer.city || "";
+  document.getElementById("editCustError").className = "banner";
+  document.getElementById("editCustError").textContent = "";
+  document.getElementById("editCustomerModal").classList.add("active");
+  setTimeout(() => document.getElementById("editCustName").focus(), 50);
 }
 
-async function setCustomerGps(dealer) {
+function closeEditCustomerModal() {
+  document.getElementById("editCustomerModal").classList.remove("active");
+}
+
+async function submitEditCustomer() {
+  const id = document.getElementById("editCustId").value;
+  const name = document.getElementById("editCustName").value.trim();
+  const contactPhone = document.getElementById("editCustPhone").value.trim();
+  const city = document.getElementById("editCustCity").value.trim();
+  const errEl = document.getElementById("editCustError");
+  if (!name) {
+    errEl.className = "banner err";
+    errEl.textContent = "Customer name is required.";
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/dealers/${id}`, {
+      method: "PATCH", headers: authHeaders(),
+      body: JSON.stringify({ name, contactPhone: contactPhone || null, city: city || null })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      errEl.className = "banner err";
+      errEl.textContent = data.error || "Update failed";
+      return;
+    }
+    closeEditCustomerModal();
+    showToast("Customer updated successfully.", "success");
+    loadCustomers();
+  } catch (e) {
+    errEl.className = "banner err";
+    errEl.textContent = e.message || "Update failed";
+  }
+}
+
+/** @deprecated use openEditCustomerModal — kept as alias for onclick handlers */
+function editCustomer(dealer) {
+  openEditCustomerModal(dealer);
+}
+
+function openEditGpsModal(dealer) {
+  document.getElementById("editGpsId").value = dealer.id;
   const current = dealer.latitude != null && dealer.longitude != null
     ? `${dealer.latitude}, ${dealer.longitude}`
     : "";
-  const location = prompt(
-    `GPS for "${dealer.name || dealer.id}"\n\nPaste Google Maps link OR coordinates (lat, lng).\nLeave empty and OK to cancel. Type CLEAR to remove GPS.`,
-    current
-  );
-  if (location === null) return;
-  const trimmed = location.trim();
-  if (!trimmed) return;
+  document.getElementById("editGpsLocation").value = current;
+  document.getElementById("editGpsSubtitle").textContent =
+    `Customer: ${dealer.name || dealer.id}`;
+  document.getElementById("editGpsError").className = "banner";
+  document.getElementById("editGpsError").textContent = "";
+  document.getElementById("editGpsModal").classList.add("active");
+  setTimeout(() => document.getElementById("editGpsLocation").focus(), 50);
+}
 
+function closeEditGpsModal() {
+  document.getElementById("editGpsModal").classList.remove("active");
+}
+
+async function submitEditGps() {
+  const id = document.getElementById("editGpsId").value;
+  const trimmed = document.getElementById("editGpsLocation").value.trim();
+  const errEl = document.getElementById("editGpsError");
+  if (!trimmed) {
+    closeEditGpsModal();
+    return;
+  }
   const body = trimmed.toUpperCase() === "CLEAR"
     ? { clearLocation: true }
     : { location: trimmed };
-
-  const res = await fetch(`${API_BASE}/api/admin/dealers/${dealer.id}`, {
-    method: "PATCH", headers: authHeaders(), body: JSON.stringify(body)
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    showToast(data.error || "Could not save GPS. Use maps link or e.g. 6.9271, 79.8612", "error");
-    return;
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/dealers/${id}`, {
+      method: "PATCH", headers: authHeaders(), body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      errEl.className = "banner err";
+      errEl.textContent = data.error || "Could not save GPS. Use maps link or e.g. 6.9271, 79.8612";
+      return;
+    }
+    closeEditGpsModal();
+    showToast(data.latitude != null
+      ? `GPS saved: ${Number(data.latitude).toFixed(5)}, ${Number(data.longitude).toFixed(5)}`
+      : "GPS cleared for this customer.", "success");
+    loadCustomers();
+  } catch (e) {
+    errEl.className = "banner err";
+    errEl.textContent = e.message || "Could not save GPS";
   }
-  showToast(data.latitude != null
-    ? `GPS saved: ${Number(data.latitude).toFixed(5)}, ${Number(data.longitude).toFixed(5)}`
-    : "GPS cleared for this customer.", "success");
-  loadCustomers();
+}
+
+function setCustomerGps(dealer) {
+  openEditGpsModal(dealer);
 }
 
 function downloadCustomerTemplate() {
@@ -2302,22 +2441,51 @@ async function submitCreateItem() {
   }
 }
 
-function editItem(product) {
-  const name = prompt("Item name:", product.name);
-  if (name === null) return;
-  const unitLabel = prompt("Unit label:", product.unit_label || "unit");
-  if (unitLabel === null) return;
-  fetch(`${API_BASE}/api/admin/items/${product.id}`, {
-    method: "PATCH", headers: authHeaders(), body: JSON.stringify({ name, unitLabel })
-  }).then(async (res) => {
+function openEditItemModal(product) {
+  document.getElementById("editItemId").value = product.id;
+  document.getElementById("editItemName").value = product.name || "";
+  document.getElementById("editItemUnit").value = product.unit_label || "unit";
+  document.getElementById("editItemError").className = "banner";
+  document.getElementById("editItemError").textContent = "";
+  document.getElementById("editItemModal").classList.add("active");
+  setTimeout(() => document.getElementById("editItemName").focus(), 50);
+}
+
+function closeEditItemModal() {
+  document.getElementById("editItemModal").classList.remove("active");
+}
+
+async function submitEditItem() {
+  const id = document.getElementById("editItemId").value;
+  const name = document.getElementById("editItemName").value.trim();
+  const unitLabel = document.getElementById("editItemUnit").value.trim() || "unit";
+  const errEl = document.getElementById("editItemError");
+  if (!name) {
+    errEl.className = "banner err";
+    errEl.textContent = "Product name is required.";
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/items/${id}`, {
+      method: "PATCH", headers: authHeaders(), body: JSON.stringify({ name, unitLabel })
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      showToast(data.error || "Item update failed", "error");
+      errEl.className = "banner err";
+      errEl.textContent = data.error || "Item update failed";
       return;
     }
+    closeEditItemModal();
     showToast("Item updated successfully.", "success");
     loadItems();
-  }).catch(e => showToast(e.message || "Item update failed", "error"));
+  } catch (e) {
+    errEl.className = "banner err";
+    errEl.textContent = e.message || "Item update failed";
+  }
+}
+
+function editItem(product) {
+  openEditItemModal(product);
 }
 
 async function deleteItem(id) {

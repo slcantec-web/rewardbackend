@@ -1,12 +1,15 @@
-NATIVE APP TOASTS — replace browser alert() notifications
-=========================================================
+NATIVE APP TOASTS + EDIT MODALS (Customer Master / Item Master)
+===============================================================
 
 WHAT THIS DOES
-- All browser alert() popups are replaced with native in-app toast notifications
-  (dark card, top-right, icon + message + dismiss).
-- Covers: Customer Master create/edit/GPS/bulk, Item Master create/edit/deactivate/bulk,
-  payouts, rates, staff, QR, exports, and Finance approve/reject/status/invite/sync.
-- Claim portal network error uses the existing result banner (no browser alert).
+1) All browser alert() popups → native in-app toast notifications
+   (dark card, top-right, success/error/warning icons).
+
+2) Customer Master + Item Master EDIT no longer use browser prompt() dialogs.
+   They open proper in-app modal forms:
+   - Edit Customer: name, phone, city
+   - Set / Edit GPS: maps link or coordinates + Clear GPS
+   - Edit Item: product name, unit packaging
 
 FILES TO UPLOAD (drag-drop into matching paths in GitHub)
 
@@ -15,12 +18,13 @@ FILES TO UPLOAD (drag-drop into matching paths in GitHub)
   public/app.js       →  public/app.js
 
 DEPLOY
-1) Admin/Finance Pages project: admin/index.html + admin/finance.html
-2) Customer claim Pages project: public/app.js
+1) Admin/Finance Pages: admin/index.html + admin/finance.html
+2) Claim portal Pages: public/app.js
 
-After deploy: hard refresh (Ctrl+Shift+R) on admin, finance, and claim pages.
+Hard refresh after deploy (Ctrl+Shift+R).
 
 TEST
-- Customer Master → Edit a customer → should show green success toast (not browser alert)
-- Item Master → Edit/Create product → same
-- Finance → Approve/Reject claim → same native toasts
+- Customer Master → Edit → modal form (not browser alert)
+- Customer Master → Set GPS / Edit GPS → modal form
+- Item Master → Edit → modal form
+- Save → green success toast
