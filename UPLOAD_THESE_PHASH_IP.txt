@@ -1,0 +1,83 @@
+FEATURE: Near-duplicate bill detection (real pHash) + IP-based rate limiting
+=============================================================================
+
+WHAT CHANGED
+- src/phash.ts          (NEW) pure-JS 64-bit perceptual hash — no native deps,
+                         works inside the Cloudflare Worker.
+- src/fraud.ts           adds near-duplicate image check + IP velocity check
+- src/index.ts           computes the pHash + resolves client IP per submission,
+                         stores both on the submission row
+- src/types.ts           new Env vars + new FraudEvaluation fields
+- src/db-adapter.ts      local/dev env passthrough for the two new IP vars
+- schema.sql             new columns: bill_image_phash, client_ip (+ indexes)
+- migrations/0004_phash_and_ip.sql   (NEW) run this if your D1 is already deployed
+- wrangler.toml          new vars: IP_VELOCITY_MAX_SUBMISSIONS, IP_VELOCITY_WINDOW_MINUTES
+- package.json           new dependency: jpeg-js (pure JS JPEG decoder)
+
+DEPLOY STEPS
+
+1) Install the new dependency locally (or let your Cloudflare Pages/Workers
+   build step do it from the updated package.json):
+     npm install
+
+2) If your D1 database is already deployed (not a fresh install), run the
+   migration in the D1 Console or via wrangler:
+     npx wrangler d1 execute reward-system-db --remote --file=./migrations/0004_phash_and_ip.sql
+   Fresh installs get these columns from schema.sql directly — no migration needed.
+
+3) Redeploy the Worker (src/index.ts, src/fraud.ts, src/phash.ts, src/types.ts
+   all need to ship together — they import from each other).
+
+4) No admin/finance.html changes are required to see the new flags — the
+   existing "Fraud Flags Detected" row in the Finance review panel already
+   prints the raw fraud_flags string, so the two new codes
+   (FLAG_DUPLICATE_BILL_IMAGE_NEAR, FLAG_HIGH_VELOCITY_IP) will show up there
+   automatically once the Worker is redeployed.
+
+OPTIONAL: show the submission IP in the Finance detail panel
+--------------------------------------------------------------
+The IP is already returned in the submission object (s.client_ip) since the
+finance submission-detail query is `SELECT s.*, ...`. If you want it visible,
+open admin/finance.html and find this block inside renderReview() (in the
+"Fraud Prevention Telemetry" panel, right after the "GPS Accuracy" row):
+
+    <div class="detail-row">
+      <span class="detail-label">GPS Accuracy</span>
+      <span class="detail-val mono">${s.gps_accuracy_m != null ? `±${Math.round(s.gps_accuracy_m)} m` : '—'}</span>
+    </div>
+
+...and add this row directly after it:
+
+    <div class="detail-row">
+      <span class="detail-label">Submission IP Address</span>
+      <span class="detail-val mono">${s.client_ip || '—'}</span>
+    </div>
+
+HOW IT BEHAVES
+- Exact duplicate image (SHA-256 byte match)   -> still auto-REJECTED (unchanged)
+- Near-duplicate image (pHash, Hamming <= 10)  -> FLAG only, sent to Finance review
+                                                    (not auto-rejected — a soft match
+                                                    could be a legitimate re-scan)
+- Same device, different mobile number         -> still hard-BLOCKED (unchanged)
+- High submission velocity from one IP         -> FLAG only (+20 risk score) — IPs
+                                                    are often shared (dealer wifi,
+                                                    carrier NAT), so this never blocks
+
+TUNING
+- Near-duplicate strictness: NEAR_DUPLICATE_THRESHOLD in src/phash.ts (default 10
+  out of 64 bits — lower = stricter/fewer false positives, higher = catches more
+  but risks flagging genuinely different bills with similar layouts).
+- IP velocity: IP_VELOCITY_MAX_SUBMISSIONS / IP_VELOCITY_WINDOW_MINUTES in
+  wrangler.toml (default: 5 submissions per 10 minutes per IP).
+
+KNOWN LIMITATION (documented, not blocking)
+The near-duplicate check compares the new pHash against the most recent 3,000
+submissions' hashes (there's no bitwise index in SQLite/D1 for Hamming-distance
+search, so it's a linear scan). Fine at current volume; if submissions grow into
+the tens of thousands, this should be replaced with a proper similarity index.
+
+NOT IMPLEMENTED (by request — deferred)
+OTP/phone verification before upload was left out of this pass. It's the
+strongest anti-fraud layer left in the original guide (ties a submission to a
+real identity, not just device signals) — flag if you want it added next; it
+would need an SMS provider (Twilio Verify, etc.) wired into the claim flow.

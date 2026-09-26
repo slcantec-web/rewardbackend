@@ -66,7 +66,9 @@ CREATE TABLE IF NOT EXISTS submissions (
   dealer_id TEXT REFERENCES dealers(id),
   mobile_number TEXT NOT NULL,
   bill_image_key TEXT NOT NULL,     -- R2 object key
-  bill_image_hash TEXT NOT NULL,    -- perceptual hash (phash) for duplicate lock
+  bill_image_hash TEXT NOT NULL,    -- exact-byte hash (SHA-256) for identical re-upload lock
+  bill_image_phash TEXT,            -- perceptual hash (pHash) for near-duplicate detection (recompressed/cropped)
+  client_ip TEXT,                   -- submission IP address (rate-limit signal)
 
   -- Telemetry: location
   gps_lat REAL,
@@ -103,6 +105,8 @@ CREATE TABLE IF NOT EXISTS submissions (
 CREATE INDEX IF NOT EXISTS idx_submissions_mobile ON submissions(mobile_number);
 CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status);
 CREATE INDEX IF NOT EXISTS idx_submissions_image_hash ON submissions(bill_image_hash);
+CREATE INDEX IF NOT EXISTS idx_submissions_phash ON submissions(bill_image_phash);
+CREATE INDEX IF NOT EXISTS idx_submissions_client_ip ON submissions(client_ip);
 CREATE INDEX IF NOT EXISTS idx_submissions_device_hash ON submissions(device_fingerprint_hash);
 CREATE INDEX IF NOT EXISTS idx_submissions_created_server ON submissions(created_at_server);
 
