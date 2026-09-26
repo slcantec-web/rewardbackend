@@ -51,6 +51,28 @@ async function sha256Hex(text: string): Promise<string> {
 }
 
 /**
+ * Normalize Sri Lankan (and general) mobile numbers so "0771234567", "771234567",
+ * "+94771234567", "94 77 123 4567" all compare as the same identity.
+ * Returns digits-only local form preferred as 0XXXXXXXXX when possible.
+ */
+export function normalizeMobile(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let s = String(raw).trim();
+  // Keep leading + briefly for country-code detection, strip other junk
+  s = s.replace(/[^\d+]/g, "");
+  if (s.startsWith("+")) s = s.slice(1);
+  // Sri Lanka country code
+  if (s.startsWith("94") && s.length >= 11) {
+    s = "0" + s.slice(2);
+  }
+  // 9-digit local starting with 7 → prefix 0
+  if (/^7\d{8}$/.test(s)) s = "0" + s;
+  // Final: digits only
+  s = s.replace(/\D/g, "");
+  return s;
+}
+
+/**
  * Device binding hash.
  * Prefer localStorage installId (stable across claims on the same browser).
  * Hardware blueprint alone is too weak: same phone models collide and UA/canvas can drift.
@@ -190,43 +212,46 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
     riskScore += 30;
   }
 
-  // --- Layer 4: same device used with a different contact number ---
-  // Match by fingerprint hash OR by installId stored in device_raw_json (covers hash-version changes).
+  // --- Layer 4: same device used with a different contact number (HARD BLOCK upstream) ---
+  // Match by fingerprint hash OR by installId in device_raw_json (covers hash-version changes).
+  // Compare normalized mobiles so formatting differences cannot bypass the block.
   let multiMobileDevice = false;
   const installIdFromInput = (input as any).installId ? String((input as any).installId).trim() : "";
-  if (deviceHash && mobileNumber) {
-    let cnt = 0;
+  const mobileNorm = normalizeMobile(mobileNumber);
+  if (deviceHash && mobileNorm) {
+    let priorMobiles: string[] = [];
     if (installIdFromInput) {
-      const row = await db
+      const { results: rows } = await db
         .prepare(
-          `SELECT COUNT(DISTINCT mobile_number) AS cnt
+          `SELECT DISTINCT mobile_number AS m
            FROM submissions
            WHERE mobile_number IS NOT NULL
              AND length(trim(mobile_number)) > 0
-             AND mobile_number != ?
              AND (
                device_fingerprint_hash = ?
                OR json_extract(device_raw_json, '$.installId') = ?
              )`
         )
-        .bind(mobileNumber, deviceHash, installIdFromInput)
-        .first<{ cnt: number }>();
-      cnt = row?.cnt ?? 0;
+        .bind(deviceHash, installIdFromInput)
+        .all<{ m: string }>();
+      priorMobiles = (rows || []).map((r) => r.m);
     } else {
-      const row = await db
+      const { results: rows } = await db
         .prepare(
-          `SELECT COUNT(DISTINCT mobile_number) AS cnt
+          `SELECT DISTINCT mobile_number AS m
            FROM submissions
            WHERE device_fingerprint_hash = ?
              AND mobile_number IS NOT NULL
-             AND length(trim(mobile_number)) > 0
-             AND mobile_number != ?`
+             AND length(trim(mobile_number)) > 0`
         )
-        .bind(deviceHash, mobileNumber)
-        .first<{ cnt: number }>();
-      cnt = row?.cnt ?? 0;
+        .bind(deviceHash)
+        .all<{ m: string }>();
+      priorMobiles = (rows || []).map((r) => r.m);
     }
-    if (cnt > 0) {
+    const otherNorms = new Set(
+      priorMobiles.map(normalizeMobile).filter((m) => m && m !== mobileNorm)
+    );
+    if (otherNorms.size > 0) {
       multiMobileDevice = true;
       flags.push("FLAG_DEVICE_MULTI_MOBILE");
       riskScore += 70;

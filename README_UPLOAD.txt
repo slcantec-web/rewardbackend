@@ -1,32 +1,30 @@
-GITHUB DRAG-AND-DROP — files that fix the build error + pHash/IP feature
-========================================================================
+SAME-DEVICE / DIFFERENT-MOBILE HARD BLOCK — upload these 3 files
+================================================================
 
-HOW TO UPLOAD
-1. Open your GitHub repo in the browser.
-2. Click into the matching folders (or use "Upload files" from repo root).
-3. Drag each file from this folder into the correct path (see table below).
-4. Commit with message e.g.: "Fix package-lock sync + pHash/IP near-dupe detection"
+WHAT THIS DOES
+- One phone/browser is locked to the first mobile number that successfully submits.
+- A second submit from the same phone with a different number → HTTP 403 blocked.
+- User sees: "This phone is already linked to another contact number."
 
-FILE → REPO PATH (replace existing files)
-----------------------------------------
-package.json                          →  package.json          ★ REQUIRED (jpeg-js dep)
-package-lock.json                     →  package-lock.json     ★ REQUIRED (fixes npm ci build error)
-wrangler.toml                         →  wrangler.toml
-schema.sql                            →  schema.sql
-src/phash.ts                          →  src/phash.ts          (NEW)
-src/fraud.ts                          →  src/fraud.ts
-src/index.ts                          →  src/index.ts
-src/types.ts                          →  src/types.ts
-src/db-adapter.ts                     →  src/db-adapter.ts
-migrations/0004_phash_and_ip.sql      →  migrations/0004_phash_and_ip.sql  (NEW)
+FILES TO UPLOAD (drag-drop into matching paths in GitHub)
 
-MINIMUM to fix the CURRENT build failure only:
-  package.json + package-lock.json
+  src/fraud.ts      →  src/fraud.ts
+  src/index.ts      →  src/index.ts
+  public/app.js     →  public/app.js
 
-AFTER UPLOAD
-- Cloudflare build will run npm ci successfully (lockfile now includes jpeg-js).
-- If D1 is already live, run once:
-    npx wrangler d1 execute reward-system-db --remote --file=./migrations/0004_phash_and_ip.sql
-- Worker redeploy picks up src/*.ts changes.
+After push: redeploy Worker (src/*) AND the customer Pages site (public/app.js).
 
-Do NOT upload node_modules or reward-system.db.
+HOW IT WORKS
+1. Browser stores a stable installId in localStorage + sessionStorage + cookie.
+2. Server hashes installId → device_fingerprint_hash.
+3. On every submit, server looks up prior mobiles for that installId/hash.
+4. Mobiles are normalized (+94, spaces, missing 0) before compare — formatting cannot bypass.
+5. If any other mobile already used this device → hard block (not only a flag).
+
+TEST
+1. Submit claim with mobile A from your phone → should succeed.
+2. Without clearing site data, submit again with mobile B → must be blocked.
+3. Clear site data / use Incognito → new installId (limitation of browser privacy).
+   Full bypass still needs a different browser profile or wiped storage.
+
+Do NOT upload node_modules or .db files.

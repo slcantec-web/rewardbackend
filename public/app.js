@@ -57,11 +57,31 @@ function blockIfDesktop() {
 // ============================================================
 function getOrCreateInstallId() {
   // Stable per-browser id — primary key for "same phone, different mobile" blocking.
+  // Persist in localStorage + sessionStorage + cookie so clearing one store is not enough.
   const KEY = "cantec_device_id";
+  const COOKIE = "cantec_device_id";
+
+  function readCookie(name) {
+    try {
+      const m = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/[$()*+.?[\\\]^{|}]/g, "\\$&") + "=([^;]*)"));
+      return m ? decodeURIComponent(m[1]) : null;
+    } catch (e) { return null; }
+  }
+  function writeCookie(name, value) {
+    try {
+      // 400 days — long-lived device binding
+      document.cookie = name + "=" + encodeURIComponent(value) + "; path=/; max-age=34560000; SameSite=Lax";
+    } catch (e) { /* ignore */ }
+  }
+
   let id = null;
   try { id = localStorage.getItem(KEY); } catch (e) { /* private mode */ }
   if (!id) {
     try { id = sessionStorage.getItem(KEY); } catch (e) { /* ignore */ }
+  }
+  if (!id) id = readCookie(COOKIE);
+  if (!id) {
+    try { id = window.__cantecDeviceId || null; } catch (e) { /* ignore */ }
   }
   if (!id) {
     id = (crypto.randomUUID && crypto.randomUUID()) ||
@@ -69,7 +89,7 @@ function getOrCreateInstallId() {
   }
   try { localStorage.setItem(KEY, id); } catch (e) { /* ignore */ }
   try { sessionStorage.setItem(KEY, id); } catch (e) { /* ignore */ }
-  // Also pin on window for this page session if storage is fully blocked
+  writeCookie(COOKIE, id);
   try { window.__cantecDeviceId = id; } catch (e) { /* ignore */ }
   return id;
 }
@@ -124,6 +144,9 @@ function captureDeviceBlueprint() {
 // ============================================================
 async function init() {
   document.getElementById("timeStatus").textContent = new Date().toLocaleString();
+
+  // Create / restore device installId as early as possible (same-phone multi-mobile block).
+  getOrCreateInstallId();
 
   // Always wire UI (search + products). Desktop only blocks *submission*, not browsing.
   const onDesktop = blockIfDesktop();
@@ -415,14 +438,21 @@ async function submitClaim() {
     .filter(([, qty]) => qty > 0)
     .map(([productId, claimedQty]) => ({ productId, claimedQty }));
 
+  // Normalize mobile client-side (server also normalizes) so +94 / spacing cannot bypass device binding
+  let mobileRaw = document.getElementById("mobileInput").value.trim().replace(/[^\d+]/g, "");
+  if (mobileRaw.startsWith("+")) mobileRaw = mobileRaw.slice(1);
+  if (mobileRaw.startsWith("94") && mobileRaw.length >= 11) mobileRaw = "0" + mobileRaw.slice(2);
+  if (/^7\d{8}$/.test(mobileRaw)) mobileRaw = "0" + mobileRaw;
+  mobileRaw = mobileRaw.replace(/\D/g, "");
+
   const payload = {
     dealerId: selectedDealerId,
-    mobileNumber: document.getElementById("mobileInput").value.trim(),
+    mobileNumber: mobileRaw,
     items,
     billImageBase64: billBase64,
     gps: gpsData,
     createdAtClient,
-    device: captureDeviceBlueprint(),
+    device: captureDeviceBlueprint(), // always includes installId
   };
 
   try {

@@ -1,7 +1,13 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env, CreateSubmissionPayload } from "./types";
-import { evaluateFraud, perceptualHashFromBytes, deviceFingerprintHash, computeNearDuplicateHash } from "./fraud";
+import {
+  evaluateFraud,
+  perceptualHashFromBytes,
+  deviceFingerprintHash,
+  computeNearDuplicateHash,
+  normalizeMobile,
+} from "./fraud";
 import { signSession, verifySession, requireRole, type SessionPayload } from "./auth";
 import { registerExtras } from "./extras";
 
@@ -117,6 +123,13 @@ app.post("/api/submissions", async (c) => {
     return c.json({ error: "Location permission is required to submit a claim" }, 400);
   }
 
+  // Canonical mobile form — blocks bypass via spacing / +94 / missing leading 0
+  const mobileNumber = normalizeMobile(payload.mobileNumber);
+  if (!mobileNumber || mobileNumber.length < 9) {
+    return c.json({ error: "Enter a valid mobile number" }, 400);
+  }
+  payload.mobileNumber = mobileNumber;
+
   // Block desktop / PC submissions — claims must be from a mobile device at the dealer
   const device = payload.device || {};
   const ua = String(device.userAgent || "");
@@ -189,19 +202,22 @@ app.post("/api/submissions", async (c) => {
     );
   }
 
-  // Extra guard: direct installId lookup (in case fraud helper missed)
+  // Extra guard: direct installId lookup (in case fraud helper missed).
+  // Load prior mobiles for this installId and compare normalized forms.
   if (clientInstallId) {
-    const extra = await env.DB.prepare(
-      `SELECT COUNT(DISTINCT mobile_number) AS cnt
+    const extraRows = await env.DB.prepare(
+      `SELECT DISTINCT mobile_number AS m
        FROM submissions
        WHERE json_extract(device_raw_json, '$.installId') = ?
          AND mobile_number IS NOT NULL
-         AND length(trim(mobile_number)) > 0
-         AND mobile_number != ?`
+         AND length(trim(mobile_number)) > 0`
     )
-      .bind(clientInstallId, payload.mobileNumber)
-      .first<{ cnt: number }>();
-    if ((extra?.cnt ?? 0) > 0) {
+      .bind(clientInstallId)
+      .all<{ m: string }>();
+    const other = (extraRows?.results || [])
+      .map((r) => normalizeMobile(r.m))
+      .filter((m) => m && m !== mobileNumber);
+    if (other.length > 0) {
       return c.json(
         {
           error:
