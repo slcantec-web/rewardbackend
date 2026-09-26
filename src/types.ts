@@ -23,6 +23,9 @@ export interface Env {
   GEOFENCE_RADIUS_KM: string;
   VELOCITY_MAX_SUBMISSIONS: string;
   VELOCITY_WINDOW_MINUTES: string;
+  /** IP-based rate limiting — soft flag only (IPs are often shared behind NAT/wifi) */
+  IP_VELOCITY_MAX_SUBMISSIONS: string;
+  IP_VELOCITY_WINDOW_MINUTES: string;
   WALLET_PAYOUT_THRESHOLD_LKR: string;
   FINANCE_JWT_SECRET: string;
   ADMIN_JWT_SECRET: string;
@@ -57,6 +60,7 @@ export interface CreateSubmissionPayload {
   gps: { lat: number; lng: number; accuracy: number };
   createdAtClient: string;      // ISO timestamp from browser
   device: DeviceBlueprint;
+  /** Ignored if present — client-supplied IPs are spoofable. The server derives the real IP from request headers. */
   clientIp?: string;
 }
 
@@ -66,8 +70,12 @@ export interface FraudEvaluation {
   timeDeltaSeconds: number;
   highVelocity: boolean;
   duplicateImage: boolean;
+  /** True when a perceptually similar (but not byte-identical) bill image was recently submitted */
+  nearDuplicateImage: boolean;
   /** True when this device fingerprint already submitted under a different mobile number */
   multiMobileDevice: boolean;
+  /** True when this IP address has submitted more than the allowed number of claims in the window */
+  highVelocityIp: boolean;
   riskScore: number;
   flags: string[];
 }

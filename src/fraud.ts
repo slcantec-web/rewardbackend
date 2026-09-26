@@ -1,4 +1,5 @@
 import type { Env, DeviceBlueprint, FraudEvaluation, D1Database } from "./types";
+import { computePerceptualHash, hammingDistanceHex, NEAR_DUPLICATE_THRESHOLD } from "./phash";
 
 /**
  * Haversine distance in km between two lat/lng points.
@@ -15,18 +16,30 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
 }
 
 /**
- * Simple average-hash (aHash) perceptual hash for duplicate-image detection.
- * NOTE: This is a lightweight placeholder — for production, precompute a
- * proper pHash (DCT-based) client-side or via an image-processing library
- * bound to the Worker, then pass the hash in in place of recomputation here.
- * This function hashes the raw bytes' downsampled luminance as a stand-in.
+ * Exact-byte content hash (SHA-256) — catches *identical* re-uploads reliably.
+ * For near-duplicate detection (re-compressed / re-cropped versions of the
+ * same bill), see `computeNearDuplicateHash` below, which uses a real
+ * DCT-based perceptual hash.
  */
 export async function perceptualHashFromBytes(bytes: Uint8Array): Promise<string> {
-  // Cheap content hash (SHA-256) — catches *identical* re-uploads reliably.
-  // Swap in a true pHash implementation for near-duplicate detection
-  // (re-compressed / re-cropped versions of the same bill).
   const digest = await crypto.subtle.digest("SHA-256", bytes as any);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Real perceptual hash (pHash) for near-duplicate bill detection — catches
+ * recompressed, lightly cropped, or resized re-uploads of the same photo
+ * that an exact SHA-256 hash would miss. Degrades gracefully (returns null)
+ * on undecodable input rather than failing the submission — exact-hash
+ * duplicate detection still applies regardless.
+ */
+export async function computeNearDuplicateHash(bytes: Uint8Array): Promise<string | null> {
+  try {
+    return computePerceptualHash(bytes);
+  } catch (err) {
+    console.error("pHash computation failed (non-fatal):", err);
+    return null;
+  }
 }
 
 /**
@@ -74,6 +87,10 @@ export interface FraudCheckInput {
   createdAtServer: string;
   deviceHash: string;
   imageHash: string;
+  /** Perceptual hash for near-duplicate image detection — null if it couldn't be computed. */
+  nearHash?: string | null;
+  /** Submission IP address (server-derived, e.g. CF-Connecting-IP) — used for rate limiting. */
+  clientIp?: string;
   /** Contact number on this claim — used to detect same device + different mobiles */
   mobileNumber?: string;
   /** Client localStorage install id — strongest same-browser binding */
@@ -81,13 +98,26 @@ export interface FraudCheckInput {
 }
 
 export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvaluation> {
-  const { env, db, dealerLat, dealerLng, gpsLat, gpsLng, createdAtClient, createdAtServer, deviceHash, imageHash, mobileNumber } =
-    input;
+  const {
+    env,
+    db,
+    dealerLat,
+    dealerLng,
+    gpsLat,
+    gpsLng,
+    createdAtClient,
+    createdAtServer,
+    deviceHash,
+    imageHash,
+    nearHash,
+    clientIp,
+    mobileNumber,
+  } = input;
 
   const flags: string[] = [];
   let riskScore = 0;
 
-  // --- Layer 1: duplicate image hash lock ---
+  // --- Layer 1: duplicate image hash lock (exact byte match) ---
   const dupRow = await db
     .prepare(`SELECT id FROM submissions WHERE bill_image_hash = ? LIMIT 1`)
     .bind(imageHash)
@@ -96,6 +126,29 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
   if (duplicateImage) {
     flags.push("FLAG_DUPLICATE_BILL_IMAGE");
     riskScore += 60;
+  }
+
+  // --- Layer 1b: near-duplicate image via perceptual hash (soft flag — sent to review, not auto-blocked) ---
+  let nearDuplicateImage = false;
+  if (nearHash) {
+    const { results: recentHashes } = await db
+      .prepare(
+        `SELECT bill_image_phash FROM submissions
+         WHERE bill_image_phash IS NOT NULL AND bill_image_phash != ''
+         ORDER BY created_at_server DESC LIMIT 3000`
+      )
+      .all<{ bill_image_phash: string }>();
+    for (const row of recentHashes || []) {
+      const dist = hammingDistanceHex(nearHash, row.bill_image_phash);
+      if (dist >= 0 && dist <= NEAR_DUPLICATE_THRESHOLD) {
+        nearDuplicateImage = true;
+        break;
+      }
+    }
+    if (nearDuplicateImage) {
+      flags.push("FLAG_DUPLICATE_BILL_IMAGE_NEAR");
+      riskScore += 45;
+    }
   }
 
   // --- Layer 2: geofence ---
@@ -140,7 +193,6 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
   // --- Layer 4: same device used with a different contact number ---
   // Match by fingerprint hash OR by installId stored in device_raw_json (covers hash-version changes).
   let multiMobileDevice = false;
-  const installId = ""; // filled by caller via optional field on input when available
   const installIdFromInput = (input as any).installId ? String((input as any).installId).trim() : "";
   if (deviceHash && mobileNumber) {
     let cnt = 0;
@@ -181,6 +233,24 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
     }
   }
 
+  // --- Layer 5: IP-based rate limiting (soft signal — IPs are often shared: dealer wifi, mobile NAT) ---
+  let highVelocityIp = false;
+  if (clientIp && clientIp !== "unknown") {
+    const ipWindowMinutes = parseInt(env.IP_VELOCITY_WINDOW_MINUTES || "10", 10);
+    const ipMaxSubmissions = parseInt(env.IP_VELOCITY_MAX_SUBMISSIONS || "5", 10);
+    const ipWindowStart = new Date(serverMs - ipWindowMinutes * 60 * 1000).toISOString();
+    const ipCountRow = await db
+      .prepare(`SELECT COUNT(*) as cnt FROM submissions WHERE client_ip = ? AND created_at_server >= ?`)
+      .bind(clientIp, ipWindowStart)
+      .first<{ cnt: number }>();
+    const ipCount = ipCountRow?.cnt ?? 0;
+    highVelocityIp = ipCount >= ipMaxSubmissions;
+    if (highVelocityIp) {
+      flags.push("FLAG_HIGH_VELOCITY_IP");
+      riskScore += 20;
+    }
+  }
+
   riskScore = Math.min(100, riskScore);
 
   return {
@@ -189,7 +259,9 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
     timeDeltaSeconds,
     highVelocity,
     duplicateImage,
+    nearDuplicateImage,
     multiMobileDevice,
+    highVelocityIp,
     riskScore,
     flags,
   };

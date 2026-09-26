@@ -179,6 +179,8 @@ export function initializeDatabaseAndEnv(): Env {
     GEOFENCE_RADIUS_KM: process.env.GEOFENCE_RADIUS_KM || "5",
     VELOCITY_MAX_SUBMISSIONS: process.env.VELOCITY_MAX_SUBMISSIONS || "3",
     VELOCITY_WINDOW_MINUTES: process.env.VELOCITY_WINDOW_MINUTES || "10",
+    IP_VELOCITY_MAX_SUBMISSIONS: process.env.IP_VELOCITY_MAX_SUBMISSIONS || "5",
+    IP_VELOCITY_WINDOW_MINUTES: process.env.IP_VELOCITY_WINDOW_MINUTES || "10",
     WALLET_PAYOUT_THRESHOLD_LKR: process.env.WALLET_PAYOUT_THRESHOLD_LKR || "1000",
     FINANCE_JWT_SECRET: process.env.FINANCE_JWT_SECRET || "finance-jwt-secret-key-cantec-secure-32-chars",
     ADMIN_JWT_SECRET: process.env.ADMIN_JWT_SECRET || "admin-jwt-secret-key-cantec-secure-32-chars",

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env, CreateSubmissionPayload } from "./types";
-import { evaluateFraud, perceptualHashFromBytes, deviceFingerprintHash } from "./fraud";
+import { evaluateFraud, perceptualHashFromBytes, deviceFingerprintHash, computeNearDuplicateHash } from "./fraud";
 import { signSession, verifySession, requireRole, type SessionPayload } from "./auth";
 import { registerExtras } from "./extras";
 
@@ -46,6 +46,20 @@ async function getAnySession(c: any): Promise<SessionPayload | null> {
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64.replace(/^data:.*;base64,/, ""));
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+/**
+ * Server-derived client IP — never trust a client-supplied value (spoofable).
+ * CF-Connecting-IP is set by Cloudflare's edge and can't be forged by the client;
+ * the X-Forwarded-For / X-Real-IP fallbacks cover local/dev (non-Cloudflare) runs.
+ */
+function resolveClientIp(c: any): string {
+  return (
+    c.req.header("cf-connecting-ip") ||
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+    c.req.header("x-real-ip") ||
+    "unknown"
+  );
 }
 
 // ============================================================
@@ -131,8 +145,10 @@ app.post("/api/submissions", async (c) => {
   await env.BILL_IMAGES.put(r2Key, imageBytes, { httpMetadata: { contentType: "image/jpeg" } });
 
   // --- Compute hashes ---
-  const imageHash = await perceptualHashFromBytes(imageBytes);
+  const imageHash = await perceptualHashFromBytes(imageBytes); // exact-byte hash (SHA-256)
+  const nearHash = await computeNearDuplicateHash(imageBytes); // near-duplicate perceptual hash (may be null)
   const deviceHash = await deviceFingerprintHash(payload.device || {});
+  const clientIp = resolveClientIp(c);
 
   // --- Look up dealer location for geofence ---
   const dealer = await env.DB.prepare(`SELECT latitude, longitude FROM dealers WHERE id = ?`)
@@ -153,6 +169,8 @@ app.post("/api/submissions", async (c) => {
     createdAtServer: nowIso,
     deviceHash,
     imageHash,
+    nearHash,
+    clientIp,
     mobileNumber: payload.mobileNumber,
     installId: clientInstallId || undefined,
   });
@@ -216,12 +234,12 @@ app.post("/api/submissions", async (c) => {
   // --- Insert submission ---
   await env.DB.prepare(
     `INSERT INTO submissions (
-      id, dealer_id, mobile_number, bill_image_key, bill_image_hash,
+      id, dealer_id, mobile_number, bill_image_key, bill_image_hash, bill_image_phash, client_ip,
       gps_lat, gps_lng, gps_accuracy_m, dealer_distance_km,
       created_at_client, created_at_server, time_delta_seconds,
       device_fingerprint_hash, device_raw_json, risk_score, fraud_flags,
       status, total_claimed_reward_lkr
-    ) VALUES (?,?,?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?, ?,?)`
+    ) VALUES (?,?,?,?,?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?, ?,?)`
   )
     .bind(
       submissionId,
@@ -229,6 +247,8 @@ app.post("/api/submissions", async (c) => {
       payload.mobileNumber,
       r2Key,
       imageHash,
+      nearHash,
+      clientIp,
       payload.gps.lat,
       payload.gps.lng,
       payload.gps.accuracy,
