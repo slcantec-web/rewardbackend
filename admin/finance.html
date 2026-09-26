@@ -529,6 +529,63 @@
     color: #b91c1c;
     border: 1px solid #fecaca;
   }
+
+  /* Native in-app Toast Notifications (replaces browser alert) */
+  #toast-stack {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+    max-width: min(420px, calc(100vw - 32px));
+  }
+  .toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #0f172a;
+    color: #f8fafc;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.35), 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 0.875rem;
+    line-height: 1.45;
+    animation: toastIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .toast.hiding { animation: toastOut 0.22s ease forwards; }
+  .toast-icon {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; margin-top: 1px;
+  }
+  .toast.success .toast-icon { background: #16a34a; color: #fff; }
+  .toast.error .toast-icon { background: #dc2626; color: #fff; }
+  .toast.info .toast-icon { background: #0f766e; color: #fff; }
+  .toast.warning .toast-icon { background: #d97706; color: #fff; }
+  .toast-body { flex: 1; white-space: pre-wrap; word-break: break-word; }
+  .toast-close {
+    flex-shrink: 0; background: transparent; border: none;
+    color: rgba(248,250,252,0.55); cursor: pointer; font-size: 18px;
+    line-height: 1; padding: 0 2px; margin-top: -2px;
+  }
+  .toast-close:hover { color: #fff; }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(24px) scale(0.96); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  @keyframes toastOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(24px); }
+  }
+  @media (max-width: 480px) {
+    #toast-stack { top: 12px; right: 12px; left: 12px; max-width: none; }
+  }
+
 </style>
 </head>
 <body>
@@ -625,6 +682,10 @@
   </div>
 </div>
 
+
+<!-- Native toast stack (app-style notifications) -->
+<div id="toast-stack" aria-live="polite" aria-atomic="true"></div>
+
 <script src="config.js"></script>
 <script>
 const API_BASE = window.API_BASE || "";
@@ -679,7 +740,28 @@ document.getElementById("logoutBtn").addEventListener("click", () => {
 });
 
 function authHeaders() {
-  return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
+  return { "Authorization": `Bearer ${token}
+
+/** Native in-app toast — replaces browser alert() for app-like UX */
+function showToast(message, type = "info", durationMs = 4200) {
+  const stack = document.getElementById("toast-stack");
+  if (!stack) { console.warn(message); return; }
+  const icons = { success: "✓", error: "!", info: "i", warning: "!" };
+  const el = document.createElement("div");
+  el.className = "toast " + (type || "info");
+  el.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><div class="toast-body"></div><button type="button" class="toast-close" aria-label="Dismiss">&times;</button>`;
+  el.querySelector(".toast-body").textContent = String(message ?? "");
+  const remove = () => {
+    el.classList.add("hiding");
+    setTimeout(() => el.remove(), 220);
+  };
+  el.querySelector(".toast-close").onclick = remove;
+  stack.appendChild(el);
+  const t = setTimeout(remove, durationMs);
+  el.addEventListener("mouseenter", () => clearTimeout(t));
+}
+
+`, "Content-Type": "application/json" };
 }
 
 function clearSessionAndReload() {
@@ -1007,11 +1089,11 @@ function recalcTotalReward() {
 
 async function approveSubmission(id) {
   if (role === "admin") {
-    alert("Admin cannot approve bills.\n\nOnly Finance staff or Finance Lead can approve claims. Sign in with a finance account to process approvals.");
+    showToast("Admin cannot approve bills.\n\nOnly Finance staff or Finance Lead can approve claims. Sign in with a finance account to process approvals.", "warning");
     return;
   }
   if (role !== "finance_staff" && role !== "finance_lead") {
-    alert("You are not allowed to approve claims. Only Finance staff or Finance Lead can approve.");
+    showToast("You are not allowed to approve claims. Only Finance staff or Finance Lead can approve.", "warning");
     return;
   }
   // First persist quantity adjustments if any
@@ -1030,7 +1112,7 @@ async function approveSubmission(id) {
       });
       if (!vRes.ok) {
         const vData = await vRes.json().catch(() => ({}));
-        alert(vData.error || "Could not save verified quantities.");
+        showToast(vData.error || "Could not save verified quantities.", "error");
         return;
       }
     }
@@ -1038,22 +1120,22 @@ async function approveSubmission(id) {
       method: "POST", headers: authHeaders()
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { alert(data.error || "Approval failed."); return; }
-    alert(`Claim ${id} approved! LKR ${data.totalApproved} credited to customer wallet.`);
+    if (!res.ok) { showToast(data.error || "Approval failed.", "error"); return; }
+    showToast(`Claim ${id} approved! LKR ${data.totalApproved} credited to customer wallet.`, "success");
     loadQueue();
     selectSubmission(id);
   } catch (err) {
-    alert("Approval error: " + err.message);
+    showToast("Approval error: " + err.message, "error");
   }
 }
 
 async function promptRejectSubmission(id) {
   if (role === "admin") {
-    alert("Admin cannot reject bills.\n\nOnly Finance staff or Finance Lead can reject claims. Sign in with a finance account to process rejections.");
+    showToast("Admin cannot reject bills.\n\nOnly Finance staff or Finance Lead can reject claims. Sign in with a finance account to process rejections.", "warning");
     return;
   }
   if (role !== "finance_staff" && role !== "finance_lead") {
-    alert("You are not allowed to reject claims. Only Finance staff or Finance Lead can reject.");
+    showToast("You are not allowed to reject claims. Only Finance staff or Finance Lead can reject.", "warning");
     return;
   }
   const code = prompt("Reason code for rejection (e.g. BLURRY_IMAGE, INVALID_DEALER, UNVERIFIED_ITEMS, DUPLICATE_BILL):", "INVALID_BILL");
@@ -1064,20 +1146,20 @@ async function promptRejectSubmission(id) {
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      alert(`Claim ${id} marked as REJECTED.`);
+      showToast(`Claim ${id} marked as REJECTED.`, "info");
       loadQueue();
       selectSubmission(id);
     } else {
-      alert(data.error || "Failed to reject claim.");
+      showToast(data.error || "Failed to reject claim.", "error");
     }
   } catch (err) {
-    alert("Error: " + err.message);
+    showToast("Error: " + err.message, "error");
   }
 }
 
 async function leadChangeStatus(id, status) {
   if (role !== "finance_lead") {
-    alert("Only Finance Lead can change status of approved or rejected bills.");
+    showToast("Only Finance Lead can change status of approved or rejected bills.", "warning");
     return;
   }
   let rejectionCode;
@@ -1094,14 +1176,14 @@ async function leadChangeStatus(id, status) {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || "Status change failed");
+      showToast(data.error || "Status change failed", "error");
       return;
     }
-    alert(`Status updated: ${data.from} → ${data.status}`);
+    showToast(`Status updated: ${data.from} → ${data.status}`, "success");
     loadQueue();
     selectSubmission(id);
   } catch (e) {
-    alert("Error: " + e.message);
+    showToast("Error: " + e.message, "error");
   }
 }
 
@@ -1138,7 +1220,7 @@ async function createBankInvite(mobile) {
 
 async function shareBankInvite(mobile) {
   if (!mobile || mobile === "—" || mobile === "undefined") {
-    alert("Bank details invites are only for end customers with a mobile number.");
+    showToast("Bank details invites are only for end customers with a mobile number.", "warning");
     return;
   }
   try {
@@ -1161,12 +1243,12 @@ async function shareBankInvite(mobile) {
     }
     try {
       await navigator.clipboard.writeText(inv.url);
-      alert("Link copied to clipboard.\n\n" + inv.url);
+      showToast("Link copied to clipboard.\n\n" + inv.url, "success");
     } catch {
       prompt("Copy this link:", inv.url);
     }
   } catch (e) {
-    alert(e.message || String(e));
+    showToast(e.message || String(e), "error");
   }
 }
 
@@ -1426,7 +1508,7 @@ document.getElementById("btnConfirmFinancePayout")?.addEventListener("click", as
 async function rebuildFinanceWallets() {
   if (!confirm("Rebuild all customer wallets from approved claims?")) return;
   await fetch(`${API_BASE}/api/finance/payouts/rebuild`, { method: "POST", headers: authHeaders() });
-  alert("Wallets synchronized.");
+  showToast("Wallets synchronized.", "success");
   loadPayoutsView();
 }
 
@@ -1435,7 +1517,7 @@ function exportFinanceCsv() {
     .then(r => r.json())
     .then(data => {
       const payouts = data.payouts || [];
-      if (!payouts.length) return alert("No payout records available to export.");
+      if (!payouts.length) return showToast("No payout records available to export.", "warning");
       const headers = ["Batch ID", "Customer Mobile", "Amount LKR", "Status", "Account Name", "Bank Name", "Branch", "Account Number", "ERP Reference", "Bank Reference", "Date"];
       const rows = payouts.map(p => [
         p.id,
@@ -1459,7 +1541,7 @@ function exportFinanceCsv() {
       a.click();
       document.body.removeChild(a);
     })
-    .catch(err => alert("Export error: " + err.message));
+    .catch(err => showToast("Export error: " + err.message, "error"));
 }
 
 if (!requireStaffSession()) {

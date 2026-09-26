@@ -731,6 +731,78 @@
     margin-top: 16px;
     gap: 12px;
   }
+
+  /* Native in-app Toast Notifications (replaces browser alert) */
+  #toast-stack {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+    max-width: min(420px, calc(100vw - 32px));
+  }
+  .toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #0f172a;
+    color: #f8fafc;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.35), 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 0.875rem;
+    line-height: 1.45;
+    animation: toastIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .toast.hiding {
+    animation: toastOut 0.22s ease forwards;
+  }
+  .toast-icon {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 1px;
+  }
+  .toast.success .toast-icon { background: #16a34a; color: #fff; }
+  .toast.error .toast-icon { background: #dc2626; color: #fff; }
+  .toast.info .toast-icon { background: #0f766e; color: #fff; }
+  .toast.warning .toast-icon { background: #d97706; color: #fff; }
+  .toast-body { flex: 1; white-space: pre-wrap; word-break: break-word; }
+  .toast-close {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: rgba(248,250,252,0.55);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 2px;
+    margin-top: -2px;
+  }
+  .toast-close:hover { color: #fff; }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(24px) scale(0.96); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  @keyframes toastOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(24px); }
+  }
+  @media (max-width: 480px) {
+    #toast-stack { top: 12px; right: 12px; left: 12px; max-width: none; }
+  }
+
 </style>
 </head>
 <body>
@@ -944,6 +1016,10 @@
   </div>
 </div>
 
+
+<!-- Native toast stack (app-style notifications) -->
+<div id="toast-stack" aria-live="polite" aria-atomic="true"></div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="config.js"></script>
@@ -988,6 +1064,27 @@ document.getElementById("logoutBtn").addEventListener("click", () => {
 function authHeaders() {
   return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
 }
+
+/** Native in-app toast — replaces browser alert() for app-like UX */
+function showToast(message, type = "info", durationMs = 4200) {
+  const stack = document.getElementById("toast-stack");
+  if (!stack) { console.warn(message); return; }
+  const icons = { success: "✓", error: "!", info: "i", warning: "!" };
+  const el = document.createElement("div");
+  el.className = "toast " + (type || "info");
+  el.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><div class="toast-body"></div><button type="button" class="toast-close" aria-label="Dismiss">&times;</button>`;
+  el.querySelector(".toast-body").textContent = String(message ?? "");
+  const remove = () => {
+    el.classList.add("hiding");
+    setTimeout(() => el.remove(), 220);
+  };
+  el.querySelector(".toast-close").onclick = remove;
+  stack.appendChild(el);
+  const t = setTimeout(remove, durationMs);
+  el.addEventListener("mouseenter", () => clearTimeout(t));
+}
+
+
 
 function clearSessionAndReload() {
   clearAllSession();
@@ -1393,7 +1490,9 @@ async function submitCreateCustomer() {
     }
     closeAddCustomerModal();
     if (data.warning) {
-      alert("Customer saved.\n" + data.warning);
+      showToast("Customer saved.\n" + data.warning, "warning");
+    } else {
+      showToast("Customer saved successfully.", "success");
     }
     loadCustomers();
     updateHeaderCounts();
@@ -1418,9 +1517,10 @@ async function editCustomer(dealer) {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    alert(data.error || "Update failed");
+    showToast(data.error || "Update failed", "error");
     return;
   }
+  showToast("Customer updated successfully.", "success");
   loadCustomers();
 }
 
@@ -1445,12 +1545,12 @@ async function setCustomerGps(dealer) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    alert(data.error || "Could not save GPS. Use maps link or e.g. 6.9271, 79.8612");
+    showToast(data.error || "Could not save GPS. Use maps link or e.g. 6.9271, 79.8612", "error");
     return;
   }
-  alert(data.latitude != null
+  showToast(data.latitude != null
     ? `GPS saved: ${Number(data.latitude).toFixed(5)}, ${Number(data.longitude).toFixed(5)}`
-    : "GPS cleared for this customer.");
+    : "GPS cleared for this customer.", "success");
   loadCustomers();
 }
 
@@ -1468,7 +1568,7 @@ function downloadCustomerTemplate() {
       sampleRows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
     );
     downloadFile(lines.join("\n"), "customer_master_sample.csv", "text/csv;charset=utf-8");
-    alert("Sample CSV downloaded.\\n\\nKeep the header row exactly as-is.\\nOnly the name column is required.\\nLeave location blank if you will Set GPS later.");
+    showToast("Sample CSV downloaded.\n\nKeep the header row exactly as-is.\nOnly the name column is required.\nLeave location blank if you will Set GPS later.", "success");
     return;
   }
 
@@ -1522,7 +1622,7 @@ let summariesFilter = "END_CUSTOMERS";
 
 async function shareBankInviteAdmin(mobile) {
   if (!mobile || mobile === "—" || mobile === "undefined") {
-    alert("Bank details invites are only for end customers with a mobile number (not dealer master accounts).");
+    showToast("Bank details invites are only for end customers with a mobile number (not dealer master accounts).", "warning");
     return;
   }
   try {
@@ -1543,9 +1643,9 @@ async function shareBankInviteAdmin(mobile) {
       window.open(d ? `https://wa.me/${d}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
       return;
     }
-    try { await navigator.clipboard.writeText(url); alert("Link copied.\\n\\n" + url); }
+    try { await navigator.clipboard.writeText(url); showToast("Link copied.\n\n" + url, "success"); }
     catch { prompt("Copy this link:", url); }
-  } catch (e) { alert(e.message || String(e)); }
+  } catch (e) { showToast(e.message || String(e), "error"); }
 }
 
 async function loadCustomerSummaries() {
@@ -1794,7 +1894,7 @@ function filterSummariesLive() {
 }
 
 function exportSummariesCsv() {
-  if (!cachedSummariesData.length) return alert("No customer records to export.");
+  if (!cachedSummariesData.length) return showToast("No customer records to export.", "warning");
   const headers = ["Customer Name", "Customer Code", "Mobile / Phone", "City", "Submissions", "Approved LKR", "Wallet Balance LKR", "Bank Account", "Bank Name", "Payout Eligible"];
   const rows = cachedSummariesData.map(c => [
     `"${c.dealer_name || ''}"`,
@@ -2006,16 +2106,16 @@ async function triggerRebuildWallets() {
       method: "POST", headers: authHeaders()
     });
     const data = await res.json();
-    alert(`Sync completed! ${data.walletsUpserted || 0} wallets updated, ${data.overThreshold || 0} over threshold.`);
+    showToast(`Sync completed! ${data.walletsUpserted || 0} wallets updated, ${data.overThreshold || 0} over threshold.`, "success");
     loadPayouts();
   } catch (e) {
-    alert("Rebuild failed: " + e.message);
+    showToast("Rebuild failed: " + e.message, "error");
   }
 }
 
 function openPayoutModal(id, mobile, amount, hasBank) {
   if (!hasBank) {
-    alert(`Customer ${mobile} has not yet registered their bank account details in the tracking portal.\n\nPlease request them to enter bank details before binding payment.`);
+    showToast(`Customer ${mobile} has not yet registered their bank account details in the tracking portal.\n\nPlease request them to enter bank details before binding payment.`, "warning");
     return;
   }
   activePayoutId = id;
@@ -2062,7 +2162,7 @@ document.getElementById("btnConfirmPayout").addEventListener("click", async () =
 });
 
 function exportPayoutsCsv() {
-  if (!cachedPayoutsData?.payouts?.length) return alert("No payout data available to export.");
+  if (!cachedPayoutsData?.payouts?.length) return showToast("No payout data available to export.", "warning");
   const headers = ["Batch ID", "Customer Mobile", "Amount LKR", "Status", "Account Name", "Bank Name", "Branch", "Account Number", "ERP Reference", "Bank Reference", "Date"];
   const rows = cachedPayoutsData.payouts.map(p => [
     p.id,
@@ -2194,6 +2294,7 @@ async function submitCreateItem() {
   });
   if (res.ok) {
     closeAddItemModal();
+    showToast("Product created successfully.", "success");
     loadItems();
   } else {
     errEl.className = "banner err";
@@ -2205,15 +2306,34 @@ function editItem(product) {
   const name = prompt("Item name:", product.name);
   if (name === null) return;
   const unitLabel = prompt("Unit label:", product.unit_label || "unit");
+  if (unitLabel === null) return;
   fetch(`${API_BASE}/api/admin/items/${product.id}`, {
     method: "PATCH", headers: authHeaders(), body: JSON.stringify({ name, unitLabel })
-  }).then(() => loadItems());
+  }).then(async (res) => {
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showToast(data.error || "Item update failed", "error");
+      return;
+    }
+    showToast("Item updated successfully.", "success");
+    loadItems();
+  }).catch(e => showToast(e.message || "Item update failed", "error"));
 }
 
 async function deleteItem(id) {
   if (!confirm("Deactivate this product? Historical claim records are preserved.")) return;
-  await fetch(`${API_BASE}/api/admin/items/${id}`, { method: "DELETE", headers: authHeaders() });
-  loadItems();
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/items/${id}`, { method: "DELETE", headers: authHeaders() });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showToast(data.error || "Could not deactivate item", "error");
+      return;
+    }
+    showToast("Product deactivated.", "success");
+    loadItems();
+  } catch (e) {
+    showToast(e.message || "Could not deactivate item", "error");
+  }
 }
 
 // =============================================================
@@ -2301,7 +2421,7 @@ async function savePayoutThreshold() {
   const input = document.getElementById("payoutThresholdInput");
   const msg = document.getElementById("thresholdSaveMsg");
   const n = parseFloat(input && input.value);
-  if (isNaN(n) || n < 0) { alert("Enter a valid threshold (LKR ≥ 0)."); return; }
+  if (isNaN(n) || n < 0) { showToast("Enter a valid threshold (LKR ≥ 0).", "error"); return; }
   if (msg) msg.textContent = "Saving…";
   try {
     const res = await fetch(`${API_BASE}/api/admin/payout-threshold`, {
@@ -2318,15 +2438,15 @@ async function savePayoutThreshold() {
 async function updateRate(productId) {
   const input = document.getElementById(`rate-${productId}`);
   const rate = parseFloat(input.value);
-  if (isNaN(rate) || rate < 0) { alert("Please enter a valid rate amount."); return; }
+  if (isNaN(rate) || rate < 0) { showToast("Please enter a valid rate amount.", "error"); return; }
   const res = await fetch(`${API_BASE}/api/admin/products/${productId}/rate`, {
     method: "POST", headers: authHeaders(), body: JSON.stringify({ rate })
   });
   if (res.ok) {
-    alert("Rate updated successfully!");
+    showToast("Rate updated successfully!", "success");
     loadRates();
   } else {
-    alert("Failed to update rate.");
+    showToast("Failed to update rate.", "error");
   }
 }
 
@@ -2405,7 +2525,7 @@ async function createStaffPrompt() {
   const username = prompt("New username:");
   if (!username) return;
   const password = prompt("Initial password (min 8 characters):");
-  if (!password || password.length < 8) return alert("Password must be at least 8 characters.");
+  if (!password || password.length < 8) return showToast("Password must be at least 8 characters.", "error");
   const role = prompt("Role (admin / finance_staff / finance_lead):", "finance_staff");
   if (!role) return;
 
@@ -2413,11 +2533,11 @@ async function createStaffPrompt() {
     method: "POST", headers: authHeaders(), body: JSON.stringify({ username, password, role })
   });
   if (res.ok) {
-    alert("Staff user created!");
+    showToast("Staff user created!", "success");
     loadStaff();
   } else {
     const d = await res.json();
-    alert(d.error || "Failed to create staff user.");
+    showToast(d.error || "Failed to create staff user.", "error");
   }
 }
 
@@ -2427,7 +2547,7 @@ async function resetPassword(username) {
   const res = await fetch(`${API_BASE}/api/admin/staff/${encodeURIComponent(username)}/reset-password`, {
     method: "POST", headers: authHeaders(), body: JSON.stringify({ password })
   });
-  alert(res.ok ? "Password reset successfully." : "Failed to reset password.");
+  showToast(res.ok ? "Password reset successfully." : "Failed to reset password.", res.ok ? "success" : "error");
 }
 
 async function changeRole(username, current) {
@@ -2551,7 +2671,7 @@ function renderQr(url) {
       </div>
     `;
   } catch (e) {
-    alert("Error rendering QR: " + e.message);
+    showToast("Error rendering QR: " + e.message, "error");
   }
 }
 
@@ -2766,14 +2886,14 @@ function handleBulkUpload(event, kind) {
         method: "POST", headers: authHeaders(), body: JSON.stringify({ rows })
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || "Upload failed"); return; }
+      if (!res.ok) { showToast(data.error || "Upload failed", "error"); return; }
       const warnList = (data.warnings || []).slice(0, 8).map(w => `Row ${w.row}: ${w.warning}`).join("\n");
       const errList = (data.errors || []).slice(0, 8).map(e => `Row ${e.row}: ${e.error}`).join("\n");
       let msg = `Import done.\nCreated: ${data.created || 0}\nUpdated: ${data.updated || 0}`;
       if (errList) msg += `\n\nErrors:\n${errList}`;
       if (warnList) msg += `\n\nNotes (GPS skipped — set later via Set GPS):\n${warnList}`;
       if (kind === "dealers") msg += "\n\nTip: Location is optional. Use Set GPS on any customer row to add maps link later.";
-      alert(msg);
+      showToast(msg, "success");
       if (kind === "dealers") {
         loadCustomers();
         updateHeaderCounts();
@@ -2781,7 +2901,7 @@ function handleBulkUpload(event, kind) {
         loadItems();
       }
     } catch (err) {
-      alert("Excel parse error: " + err.message);
+      showToast("Excel parse error: " + err.message, "error");
     }
   };
   reader.readAsArrayBuffer(file);

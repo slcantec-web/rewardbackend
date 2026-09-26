@@ -1,20 +1,26 @@
-FIX: Finance "Mark Paid" — both ERP + Bank/Self references (same as admin)
-=========================================================================
+NATIVE APP TOASTS — replace browser alert() notifications
+=========================================================
 
-WHY
-- Admin panel used a proper modal with 2 fields: ERP voucher + Bank/CEFT reference.
-- Finance portal used browser prompt() twice; the second (bank/self) was easy to miss,
-  so it looked like finance only had ERP reference.
+WHAT THIS DOES
+- All browser alert() popups are replaced with native in-app toast notifications
+  (dark card, top-right, icon + message + dismiss).
+- Covers: Customer Master create/edit/GPS/bulk, Item Master create/edit/deactivate/bulk,
+  payouts, rates, staff, QR, exports, and Finance approve/reject/status/invite/sync.
+- Claim portal network error uses the existing result banner (no browser alert).
 
-NOW
-- Finance Payout Ledger → Mark Paid opens the same style modal with:
-  1) ERP Payment Voucher Reference *
-  2) Bank / Self Transfer Reference *
-- Both are required before Confirm Bank Payment.
-- Authority remains with finance_lead (and admin) as before.
+FILES TO UPLOAD (drag-drop into matching paths in GitHub)
 
-UPLOAD
+  admin/index.html    →  admin/index.html
   admin/finance.html  →  admin/finance.html
+  public/app.js       →  public/app.js
 
-Redeploy the Admin/Finance Pages project (not only the Worker).
-Hard refresh finance.html after deploy (Ctrl+Shift+R).
+DEPLOY
+1) Admin/Finance Pages project: admin/index.html + admin/finance.html
+2) Customer claim Pages project: public/app.js
+
+After deploy: hard refresh (Ctrl+Shift+R) on admin, finance, and claim pages.
+
+TEST
+- Customer Master → Edit a customer → should show green success toast (not browser alert)
+- Item Master → Edit/Create product → same
+- Finance → Approve/Reject claim → same native toasts

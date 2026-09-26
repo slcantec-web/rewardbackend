@@ -485,7 +485,12 @@ async function submitClaim() {
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (e) {
-    alert("Network error — please try again.");
+    const banner = document.getElementById("resultBanner");
+    if (banner) {
+      banner.className = "result-banner err";
+      banner.style.display = "block";
+      banner.textContent = "Network error — please try again.";
+    }
   } finally {
     btn.textContent = "Submit Claim & Get Tracking ID";
     validateForm();
