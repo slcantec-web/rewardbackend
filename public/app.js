@@ -12,6 +12,9 @@ let selectedDealerId = null;
 let gpsData = null;
 let billFile = null;
 let billBase64 = null;
+/** null = not checked yet; true = name required; false = known mobile, skip name */
+let customerNameRequired = null;
+let mobileCheckTimer = null;
 const quantities = {}; // productId -> qty
 const createdAtClient = new Date().toISOString();
 
@@ -154,7 +157,12 @@ async function init() {
   setupDealerAutocomplete();
   document.getElementById("uploadBox")?.addEventListener("click", () => document.getElementById("billFileInput").click());
   document.getElementById("billFileInput")?.addEventListener("change", handleFileSelect);
-  document.getElementById("mobileInput")?.addEventListener("input", validateForm);
+  document.getElementById("mobileInput")?.addEventListener("input", () => {
+    scheduleMobileCheck();
+    validateForm();
+  });
+  document.getElementById("mobileInput")?.addEventListener("blur", checkMobileForName);
+  document.getElementById("customerNameInput")?.addEventListener("input", validateForm);
   document.getElementById("submitBtn")?.addEventListener("click", submitClaim);
 
   try {
@@ -430,15 +438,93 @@ function compressImage(file, maxDim, quality) {
   });
 }
 
+function normalizeMobileClient(raw) {
+  let mobileRaw = String(raw || "").trim().replace(/[^\d+]/g, "");
+  if (mobileRaw.startsWith("+")) mobileRaw = mobileRaw.slice(1);
+  if (mobileRaw.startsWith("94") && mobileRaw.length >= 11) mobileRaw = "0" + mobileRaw.slice(2);
+  if (/^7\d{8}$/.test(mobileRaw)) mobileRaw = "0" + mobileRaw;
+  return mobileRaw.replace(/\D/g, "");
+}
+
+function setCustomerNameVisibility(show, knownName) {
+  const wrap = document.getElementById("customerNameWrap");
+  const hint = document.getElementById("mobileHint");
+  const nameInput = document.getElementById("customerNameInput");
+  if (!wrap) return;
+  if (show) {
+    wrap.style.display = "block";
+    customerNameRequired = true;
+    if (hint) {
+      hint.style.display = "block";
+      hint.style.color = "var(--muted)";
+      hint.textContent = "New mobile — please enter your full name below.";
+    }
+  } else {
+    wrap.style.display = "none";
+    customerNameRequired = false;
+    if (nameInput) nameInput.value = "";
+    if (hint) {
+      hint.style.display = "block";
+      hint.style.color = "var(--primary, #0f766e)";
+      hint.textContent = knownName
+        ? `Welcome back, ${knownName}. Name is already on file.`
+        : "This mobile is already registered — name not required.";
+    }
+  }
+  validateForm();
+}
+
+async function checkMobileForName() {
+  const input = document.getElementById("mobileInput");
+  const mobile = normalizeMobileClient(input?.value || "");
+  const wrap = document.getElementById("customerNameWrap");
+  const hint = document.getElementById("mobileHint");
+  if (mobile.length < 9) {
+    customerNameRequired = null;
+    if (wrap) wrap.style.display = "none";
+    if (hint) hint.style.display = "none";
+    validateForm();
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/public/mobile-check?mobile=${encodeURIComponent(mobile)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      // On error, show name field to be safe for first-time users
+      setCustomerNameVisibility(true);
+      return;
+    }
+    if (data.hasName && data.name) {
+      setCustomerNameVisibility(false, data.name);
+    } else if (data.known && data.hasName) {
+      setCustomerNameVisibility(false);
+    } else {
+      // New mobile, or known but name never collected
+      setCustomerNameVisibility(true);
+    }
+  } catch {
+    setCustomerNameVisibility(true);
+  }
+}
+
+function scheduleMobileCheck() {
+  clearTimeout(mobileCheckTimer);
+  mobileCheckTimer = setTimeout(checkMobileForName, 450);
+}
+
 function validateForm() {
   if (!isMobileDevice()) {
     document.getElementById("submitBtn").disabled = true;
     return;
   }
   const hasQty = Object.values(quantities).some((q) => q > 0);
-  const hasMobile = document.getElementById("mobileInput").value.trim().length >= 9;
+  const mobile = normalizeMobileClient(document.getElementById("mobileInput")?.value || "");
+  const hasMobile = mobile.length >= 9;
+  const nameEl = document.getElementById("customerNameInput");
+  const nameVal = (nameEl?.value || "").trim();
+  const nameOk = customerNameRequired !== true || nameVal.length >= 2;
   const hasGps = !!(gpsData && gpsData.lat != null && gpsData.lng != null);
-  const ready = !!(selectedDealerId && hasQty && billBase64 && hasGps && hasMobile);
+  const ready = !!(selectedDealerId && hasQty && billBase64 && hasGps && hasMobile && nameOk);
   document.getElementById("submitBtn").disabled = !ready;
 }
 
@@ -464,11 +550,20 @@ async function submitClaim() {
     .map(([productId, claimedQty]) => ({ productId, claimedQty }));
 
   // Normalize mobile client-side (server also normalizes) so +94 / spacing cannot bypass device binding
-  let mobileRaw = document.getElementById("mobileInput").value.trim().replace(/[^\d+]/g, "");
-  if (mobileRaw.startsWith("+")) mobileRaw = mobileRaw.slice(1);
-  if (mobileRaw.startsWith("94") && mobileRaw.length >= 11) mobileRaw = "0" + mobileRaw.slice(2);
-  if (/^7\d{8}$/.test(mobileRaw)) mobileRaw = "0" + mobileRaw;
-  mobileRaw = mobileRaw.replace(/\D/g, "");
+  const mobileRaw = normalizeMobileClient(document.getElementById("mobileInput").value);
+  const customerName = (document.getElementById("customerNameInput")?.value || "").trim();
+
+  if (customerNameRequired === true && customerName.length < 2) {
+    const banner = document.getElementById("resultBanner");
+    if (banner) {
+      banner.style.display = "block";
+      banner.className = "result-banner err";
+      banner.textContent = "Please enter your full name (required for first-time claims).";
+    }
+    btn.disabled = false;
+    btn.textContent = "Submit Claim & Get Tracking ID";
+    return;
+  }
 
   const payload = {
     dealerId: selectedDealerId,
@@ -479,6 +574,9 @@ async function submitClaim() {
     createdAtClient,
     device: captureDeviceBlueprint(), // always includes installId
   };
+  if (customerNameRequired === true && customerName) {
+    payload.customerName = customerName;
+  }
 
   try {
     const res = await fetch(`${API_BASE}/api/submissions`, {
@@ -503,6 +601,9 @@ async function submitClaim() {
           `⚠️ <b>This phone is already linked to another contact number.</b><br>` +
           `You cannot submit claims for a different number from the same device.<br>` +
           `Use the original mobile number for this phone, or contact CanTec support if you need help.`;
+      } else if (data.code === "CUSTOMER_NAME_REQUIRED") {
+        setCustomerNameVisibility(true);
+        banner.innerHTML = `⚠️ Please enter your full name — required the first time you claim with this mobile.`;
       } else {
         const msg = data.error || (data.flags || []).join(", ") || "see support";
         banner.innerHTML = `⚠️ Claim could not be accepted (${msg}).`;

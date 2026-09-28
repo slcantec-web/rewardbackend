@@ -300,6 +300,26 @@ async function customerProfile(db: D1Database, mobileOrParam: string, fullBank: 
     .bind(searchPhone, searchPhone, dealerId, dealerId)
     .first<any>();
 
+  // End-customer name (collected on first claim)
+  let endCustomerName: string | null = null;
+  try {
+    await db.prepare(
+      `CREATE TABLE IF NOT EXISTS end_customers (
+        mobile_number TEXT PRIMARY KEY,
+        full_name TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`
+    ).run();
+    if (searchPhone) {
+      const en = await db
+        .prepare(`SELECT full_name FROM end_customers WHERE mobile_number = ? LIMIT 1`)
+        .bind(searchPhone)
+        .first<{ full_name: string }>();
+      endCustomerName = en?.full_name?.trim() || null;
+    }
+  } catch { /* ignore */ }
+
   // Security / risk dossier (rate limits, bank collisions, blocked attempts)
   let security: any = null;
   try {
@@ -340,6 +360,7 @@ async function customerProfile(db: D1Database, mobileOrParam: string, fullBank: 
     devices: devices || [],
     recent: recent || [],
     bank: bank ? { ...bank, account_number: fullBank ? bank.account_number : maskAccount(bank.account_number) } : null,
+    endCustomerName,
     security,
     fraudHistory,
   };

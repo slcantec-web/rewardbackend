@@ -55,6 +55,8 @@ export interface SubmissionItemInput {
 export interface CreateSubmissionPayload {
   dealerId: string;
   mobileNumber: string;
+  /** Required only on first claim for this mobile — stored as end-customer name */
+  customerName?: string;
   items: SubmissionItemInput[];
   billImageBase64: string;      // client-compressed image, base64
   gps: { lat: number; lng: number; accuracy: number };

@@ -3070,6 +3070,7 @@ async function openCustomerDetail(mobileOrId) {
         <div class="detail-row"><span class="detail-label">Store / Customer Name</span><span class="detail-val">${d.name || 'Direct Customer'}</span></div>
         <div class="detail-row"><span class="detail-label">Customer Code</span><span class="detail-val mono">${d.customer_code || '—'}</span></div>
         <div class="detail-row"><span class="detail-label">Contact Phone</span><span class="detail-val mono">${d.contact_phone || c.contactPhone || '—'}</span></div>
+        <div class="detail-row"><span class="detail-label">End Customer Name</span><span class="detail-val">${c.endCustomerName || (isDealer ? '—' : '<span style="color:var(--warning);">Not collected yet</span>')}</span></div>
         <div class="detail-row"><span class="detail-label">City</span><span class="detail-val">${d.city || '—'}</span></div>
         <div class="detail-row"><span class="detail-label">Address</span><span class="detail-val">${d.address || '—'}</span></div>
         <div class="detail-row">

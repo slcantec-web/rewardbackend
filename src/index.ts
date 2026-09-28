@@ -32,6 +32,28 @@ function genSubmissionId(): string {
   return `SUB-${year}-${rand}`;
 }
 
+/** End-customer display name (one row per mobile — collected on first claim only) */
+async function ensureEndCustomersTable(db: import("./types").D1Database) {
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS end_customers (
+      mobile_number TEXT PRIMARY KEY,
+      full_name TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`
+  ).run();
+}
+
+async function getEndCustomerName(db: import("./types").D1Database, mobile: string): Promise<string | null> {
+  await ensureEndCustomersTable(db);
+  const row = await db
+    .prepare(`SELECT full_name FROM end_customers WHERE mobile_number = ? LIMIT 1`)
+    .bind(mobile)
+    .first<{ full_name: string }>();
+  return row?.full_name?.trim() || null;
+}
+
+
 async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -127,6 +149,31 @@ app.get("/api/dealers", async (c) => {
 });
 
 // ============================================================
+// Public: check if mobile already has an end-customer name
+// ============================================================
+app.get("/api/public/mobile-check", async (c) => {
+  const raw = (c.req.query("mobile") || "").trim();
+  const mobile = normalizeMobile(raw);
+  if (!mobile || mobile.length < 9) {
+    return c.json({ known: false, error: "Enter a valid mobile number" }, 400);
+  }
+  // Known if prior submission, wallet, bank, or saved end-customer name
+  const name = await getEndCustomerName(c.env.DB, mobile);
+  const prior =
+    (await c.env.DB.prepare(`SELECT 1 AS x FROM submissions WHERE mobile_number = ? LIMIT 1`).bind(mobile).first()) ||
+    (await c.env.DB.prepare(`SELECT 1 AS x FROM wallets WHERE mobile_number = ? LIMIT 1`).bind(mobile).first()) ||
+    (await c.env.DB.prepare(`SELECT 1 AS x FROM customer_bank_details WHERE mobile_number = ? LIMIT 1`).bind(mobile).first());
+  if (name) {
+    return c.json({ known: true, hasName: true, name });
+  }
+  if (prior) {
+    // Returning mobile but name never collected — still ask once
+    return c.json({ known: true, hasName: false, name: null });
+  }
+  return c.json({ known: false, hasName: false, name: null });
+});
+
+// ============================================================
 // Customer: Submit a claim
 // ============================================================
 
@@ -171,6 +218,23 @@ app.post("/api/submissions", async (c) => {
       },
       403
     );
+  }
+
+  // End-customer name: required only the first time this mobile appears (or if never collected)
+  const existingName = await getEndCustomerName(env.DB, mobileNumber);
+  let customerName = String((payload as any).customerName || "").trim().replace(/\s+/g, " ");
+  if (existingName) {
+    customerName = existingName; // ignore client re-entry
+  } else if (!customerName || customerName.length < 2) {
+    return c.json(
+      {
+        error: "Please enter your full name (required for first-time claims on this mobile number).",
+        code: "CUSTOMER_NAME_REQUIRED",
+      },
+      400
+    );
+  } else if (customerName.length > 80) {
+    return c.json({ error: "Name is too long (max 80 characters).", code: "CUSTOMER_NAME_INVALID" }, 400);
   }
 
   // Daily claim limit per mobile (default 3 — matches public UI)
@@ -347,6 +411,17 @@ app.post("/api/submissions", async (c) => {
        VALUES (?,?,?,?,?)`
     )
       .bind(submissionId, item.productId, item.claimedQty, item.rate, item.lineReward)
+      .run();
+  }
+
+  // Persist end-customer name on first successful collection (do not overwrite later)
+  if (customerName && !existingName) {
+    await ensureEndCustomersTable(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO end_customers (mobile_number, full_name) VALUES (?, ?)
+       ON CONFLICT(mobile_number) DO NOTHING`
+    )
+      .bind(mobileNumber, customerName)
       .run();
   }
 
