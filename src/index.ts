@@ -241,6 +241,57 @@ app.post("/api/submissions", async (c) => {
     );
   }
 
+  // Early device binding check (before profile forms) — same phone cannot switch mobiles
+  const earlyDeviceHash = await deviceFingerprintHash(payload.device || {});
+  const earlyInstallId = String((payload.device as any)?.installId || "").trim();
+  if (earlyDeviceHash && mobileNumber) {
+    let priorMobiles: string[] = [];
+    if (earlyInstallId) {
+      const { results: rows } = await env.DB.prepare(
+        `SELECT DISTINCT mobile_number AS m
+         FROM submissions
+         WHERE mobile_number IS NOT NULL AND length(trim(mobile_number)) > 0
+           AND (device_fingerprint_hash = ? OR json_extract(device_raw_json, '$.installId') = ?)`
+      )
+        .bind(earlyDeviceHash, earlyInstallId)
+        .all<{ m: string }>();
+      priorMobiles = (rows || []).map((r) => r.m);
+    } else {
+      const { results: rows } = await env.DB.prepare(
+        `SELECT DISTINCT mobile_number AS m
+         FROM submissions
+         WHERE device_fingerprint_hash = ?
+           AND mobile_number IS NOT NULL AND length(trim(mobile_number)) > 0`
+      )
+        .bind(earlyDeviceHash)
+        .all<{ m: string }>();
+      priorMobiles = (rows || []).map((r) => r.m);
+    }
+    const other = priorMobiles.map(normalizeMobile).filter((m) => m && m !== mobileNumber);
+    if (other.length > 0) {
+      await logSecurityEvent(env.DB, {
+        eventType: "DEVICE_MULTI_MOBILE",
+        mobile: mobileNumber,
+        relatedMobile: other[0],
+        clientIp: resolveClientIp(c),
+        deviceHash: earlyDeviceHash,
+        details: { priorMobiles: other.slice(0, 5), source: "early_device_guard" },
+      });
+      return c.json(
+        {
+          error:
+            "This phone is already linked to a different contact number. " +
+            "You cannot submit claims for another mobile from the same device. " +
+            "Use the original mobile number registered on this phone, or contact CanTec support.",
+          code: "DEVICE_MULTI_MOBILE",
+          flags: ["FLAG_DEVICE_MULTI_MOBILE"],
+          linkedMobileHint: other[0].length >= 4 ? "****" + other[0].slice(-4) : "****",
+        },
+        403
+      );
+    }
+  }
+
   // Profile (name + bank): required only until this mobile has both on file
   const existingName = await getEndCustomerName(env.DB, mobileNumber);
   const existingBank = await env.DB.prepare(
@@ -255,8 +306,11 @@ app.post("/api/submissions", async (c) => {
   } else if (!customerName || customerName.length < 2) {
     return c.json(
       {
-        error: "Please enter your full name (required the first time you claim with this mobile).",
+        error:
+          "This mobile number is new to the system. Please fill in your full name and bank details in the form below (only required once for this number).",
         code: "CUSTOMER_NAME_REQUIRED",
+        needProfile: true,
+        missing: ["name", "bank"],
       },
       400
     );
@@ -274,8 +328,13 @@ app.post("/api/submissions", async (c) => {
     if (!accountName || !accountNumber || !bankName) {
       return c.json(
         {
-          error: "Bank account name, account number, and bank name are required the first time you claim with this mobile.",
+          error:
+            "This mobile number does not have bank details on file yet. " +
+            "Please enter account holder name, account number, and bank name below (only required once). " +
+            "After that, future claims with this number will not ask again.",
           code: "BANK_DETAILS_REQUIRED",
+          needProfile: true,
+          missing: ["bank"],
         },
         400
       );

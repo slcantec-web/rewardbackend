@@ -546,8 +546,8 @@ function setProfileVisibility(show, opts) {
       if (!opts.hasName) missing.push("name");
       if (!opts.hasBank) missing.push("bank details");
       hint.textContent = missing.length
-        ? "Please enter your " + missing.join(" & ") + " below (once only for this mobile)."
-        : "Please complete your payout profile below (once only).";
+        ? "New or incomplete profile for this number — enter " + missing.join(" & ") + " below (once only)."
+        : "Please complete your payout profile below (once only for this mobile).";
     }
   } else {
     wrap.style.display = "none";
@@ -563,8 +563,8 @@ function setProfileVisibility(show, opts) {
       if (opts.knownName) bits.push(opts.knownName);
       if (opts.hasBank) bits.push("bank on file");
       hint.textContent = bits.length
-        ? `Welcome back${opts.knownName ? ", " + opts.knownName : ""}. Profile on file — you can submit claims only.`
-        : "This mobile is already registered — profile not required again.";
+        ? `Welcome back${opts.knownName ? ", " + opts.knownName : ""}. Name & bank already saved — just submit your claim.`
+        : "This mobile is already registered — name & bank not required again.";
     }
   }
   validateForm();
@@ -646,6 +646,11 @@ async function submitClaim() {
     return;
   }
 
+  // Ensure profile check is up to date for the mobile currently entered
+  try {
+    await checkMobileProfile();
+  } catch (_) {}
+
   const btn = document.getElementById("submitBtn");
   btn.disabled = true;
   btn.textContent = "Uploading bill…";
@@ -668,7 +673,7 @@ async function submitClaim() {
       if (banner) {
         banner.style.display = "block";
         banner.className = "result-banner err";
-        banner.textContent = "Please complete your name and bank details (required the first time for this mobile).";
+        banner.textContent = "This mobile needs your name and bank details once. Fill the section under the mobile number, then submit again.";
       }
       btn.disabled = false;
       btn.textContent = "Submit Claim & Get Tracking ID";
@@ -718,17 +723,27 @@ async function submitClaim() {
       banner.className = "result-banner err";
       if (data.code === "DEVICE_MULTI_MOBILE" || (data.flags || []).includes("FLAG_DEVICE_MULTI_MOBILE")) {
         banner.innerHTML =
-          `⚠️ <b>This phone is already linked to another contact number.</b><br>` +
-          `You cannot submit claims for a different number from the same device.<br>` +
-          `Use the original mobile number for this phone, or contact CanTec support if you need help.`;
+          `⚠️ <b>This phone is already linked to a different contact number.</b><br>` +
+          `You cannot claim using another mobile from the same device.` +
+          (data.linkedMobileHint ? `<br>Previously linked number ends with <b class="mono">${data.linkedMobileHint}</b>.` : "") +
+          `<br>Use that original mobile number on this phone, or contact CanTec support.`;
       } else if (data.code === "CUSTOMER_NAME_REQUIRED" || data.code === "BANK_DETAILS_REQUIRED") {
-        setProfileVisibility(true, { hasName: data.code !== "CUSTOMER_NAME_REQUIRED", hasBank: data.code !== "BANK_DETAILS_REQUIRED" });
-        banner.innerHTML = `⚠️ Please complete your name and bank details — required the first time for this mobile.`;
+        setProfileVisibility(true, {
+          hasName: data.code !== "CUSTOMER_NAME_REQUIRED",
+          hasBank: data.code !== "BANK_DETAILS_REQUIRED",
+        });
+        banner.innerHTML =
+          `⚠️ <b>Profile incomplete for this mobile number.</b><br>` +
+          (data.error || "Please enter your full name and bank details in the section under the mobile field (only once).") +
+          `<br>After saving once, later claims with this number will skip this step.`;
+        try {
+          document.getElementById("customerProfileWrap")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        } catch (_) {}
       } else if (data.code === "BANK_ACCOUNT_COLLISION") {
         banner.innerHTML = `⚠️ This bank account is already linked to another mobile number. Use a different account.`;
       } else {
         const msg = data.error || (data.flags || []).join(", ") || "see support";
-        banner.innerHTML = `⚠️ Claim could not be accepted (${msg}).`;
+        banner.innerHTML = `⚠️ Claim could not be accepted — ${msg}`;
       }
     }
     window.scrollTo({ top: 0, behavior: "smooth" });

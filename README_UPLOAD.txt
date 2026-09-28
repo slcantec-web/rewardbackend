@@ -1,29 +1,26 @@
-PERF: Admin / Finance / Login / API workflows
-============================================
+FIX: Unclear "enter full name" error when switching mobiles
+==========================================================
 
-ADMIN
-- Boot no longer loads full customer-summaries (was the slow badge call)
-- Header counts (dealers + pending payouts) load in parallel
-- Overview + badges start together
-- Preconnect to Worker API
+WHAT WAS WRONG
+- Name/bank validation ran BEFORE same-phone multi-mobile check.
+- Using a different contact number on a phone already linked to another
+  mobile could show "enter full name..." instead of the real reason.
+- Error text was vague.
 
-FINANCE
-- Submission detail + bill image prefetch in parallel
-- Preconnect to Worker API
+NOW
+1) Same-phone / different-mobile is checked FIRST with a clear message:
+   "This phone is already linked to a different contact number..."
+   (shows last-4 of previous number when available)
 
-LOGIN
-- Preconnect to Worker API (faster first sign-in)
+2) Name / bank messages are explicit:
+   - New mobile → fill name + bank once under the mobile field
+   - Missing bank only → bank fields required once
+   - UI scrolls to the profile section when server asks for it
 
-API (Worker)
-- Customer summaries: 7 independent D1 queries in Promise.all
-- Customer dossier profile: parallel stats/wallet/bank/devices/recent
-- Claim rates: one query for all active rates (not per product line)
-
-Also includes prior claim-submit optimisations (fraud + public portal) if you redeploy those files.
+3) Claim submit re-checks mobile profile before upload so fields are shown.
 
 UPLOAD
-  Admin Pages:  admin/index.html, admin/finance.html, admin/login.html
-  Worker:       src/extras.ts, src/index.ts, src/fraud.ts (optional with claim perf)
-  Claim Portal: public/app.js, public/index.html (optional with claim perf)
+  Claim Portal: public/app.js
+  Worker:       src/index.ts
 
-Redeploy Admin + Worker. Hard refresh.
+Redeploy both. Hard refresh claim page on the phone.
