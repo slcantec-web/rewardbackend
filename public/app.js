@@ -244,10 +244,41 @@ function requestLocation() {
 async function loadProducts() {
   const list = document.getElementById("productList");
   if (list) list.innerHTML = `<div style="color:var(--muted);font-size:0.85rem;">Loading products…</div>`;
+
+  try {
+    const cached = sessionStorage.getItem("cantec_products_v1");
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && Array.isArray(parsed.products) && parsed.ts && Date.now() - parsed.ts < 5 * 60 * 1000) {
+        products = parsed.products;
+        if (!products.length) {
+          if (list) list.innerHTML = `<div style="color:var(--muted);font-size:0.85rem;">No products configured yet.</div>`;
+          return;
+        }
+        renderProducts();
+        fetch(`${API_BASE}/api/products`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (!data) return;
+            products = data.products || [];
+            try {
+              sessionStorage.setItem("cantec_products_v1", JSON.stringify({ ts: Date.now(), products }));
+            } catch (_) {}
+            renderProducts();
+          })
+          .catch(() => {});
+        return;
+      }
+    }
+  } catch (_) {}
+
   const res = await fetch(`${API_BASE}/api/products`);
   if (!res.ok) throw new Error("products " + res.status);
   const data = await res.json();
   products = data.products || [];
+  try {
+    sessionStorage.setItem("cantec_products_v1", JSON.stringify({ ts: Date.now(), products }));
+  } catch (_) {}
   if (!products.length) {
     if (list) list.innerHTML = `<div style="color:var(--muted);font-size:0.85rem;">No products configured yet.</div>`;
     return;
@@ -420,33 +451,73 @@ function handleFileSelect(e) {
   const file = e.target.files[0];
   if (!file) return;
   billFile = file;
+  billBase64 = null;
   document.getElementById("uploadBox").classList.add("has-file");
-  document.getElementById("fileNameLabel").textContent = `File: ${file.name}`;
+  const label = document.getElementById("fileNameLabel");
+  if (label) label.textContent = "Compressing photo…";
+  validateForm();
 
-  // Client-side compression via canvas downscale before base64 encode
-  compressImage(file, 1280, 0.7).then((base64) => {
-    billBase64 = base64;
-    validateForm();
-  });
+  // Smaller payload = faster mobile upload (max edge 960px, quality ~0.62)
+  compressImage(file, 960, 0.62)
+    .then((base64) => {
+      billBase64 = base64;
+      const kb = Math.round((base64.length * 0.75) / 1024);
+      if (label) label.textContent = "Ready: " + file.name + " (~" + kb + " KB)";
+      validateForm();
+    })
+    .catch(() => {
+      if (label) label.textContent = "Could not read image — try another photo";
+      billBase64 = null;
+      validateForm();
+    });
 }
 
 function compressImage(file, maxDim, quality) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = (e) => (img.src = e.target.result);
-    img.onload = () => {
-      let { width, height } = img;
+  return new Promise((resolve, reject) => {
+    const finish = (bitmap, w, h) => {
+      let width = w;
+      let height = h;
       if (width > maxDim || height > maxDim) {
         const scale = maxDim / Math.max(width, height);
-        width *= scale;
-        height *= scale;
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
       }
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
-      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("canvas"));
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      if (bitmap.close) {
+        try { bitmap.close(); } catch (_) {}
+      }
       resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+
+    if (typeof createImageBitmap === "function") {
+      createImageBitmap(file)
+        .then((bmp) => finish(bmp, bmp.width, bmp.height))
+        .catch(() => {
+          const img = new Image();
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("read"));
+          reader.onload = (e) => {
+            img.onload = () => finish(img, img.width, img.height);
+            img.onerror = () => reject(new Error("img"));
+            img.src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      return;
+    }
+
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read"));
+    reader.onload = (e) => {
+      img.onload = () => finish(img, img.width, img.height);
+      img.onerror = () => reject(new Error("img"));
+      img.src = e.target.result;
     };
     reader.readAsDataURL(file);
   });
@@ -538,7 +609,7 @@ async function checkMobileProfile() {
 
 function scheduleMobileCheck() {
   clearTimeout(mobileCheckTimer);
-  mobileCheckTimer = setTimeout(checkMobileProfile, 450);
+  mobileCheckTimer = setTimeout(checkMobileProfile, 350);
 }
 
 function validateForm() {
@@ -577,7 +648,7 @@ async function submitClaim() {
 
   const btn = document.getElementById("submitBtn");
   btn.disabled = true;
-  btn.textContent = "Submitting…";
+  btn.textContent = "Uploading bill…";
 
   const items = Object.entries(quantities)
     .filter(([, qty]) => qty > 0)

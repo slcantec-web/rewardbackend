@@ -150,14 +150,15 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
     riskScore += 60;
   }
 
-  // --- Layer 1b: near-duplicate image via perceptual hash (soft flag — sent to review, not auto-blocked) ---
+  // --- Layer 1b: near-duplicate via pHash (skip if exact duplicate already found) ---
+  // Cap scan size for latency — last ~400 recent hashed bills (was 3000).
   let nearDuplicateImage = false;
-  if (nearHash) {
+  if (nearHash && !duplicateImage) {
     const { results: recentHashes } = await db
       .prepare(
         `SELECT bill_image_phash FROM submissions
          WHERE bill_image_phash IS NOT NULL AND bill_image_phash != ''
-         ORDER BY created_at_server DESC LIMIT 3000`
+         ORDER BY created_at_server DESC LIMIT 400`
       )
       .all<{ bill_image_phash: string }>();
     for (const row of recentHashes || []) {
@@ -195,31 +196,27 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
     riskScore += 10;
   }
 
-  // --- Layer 3: high-velocity device capping ---
+  // --- Layers 3–5 in parallel: device velocity, multi-mobile, IP velocity ---
   const windowMinutes = parseInt(env.VELOCITY_WINDOW_MINUTES || "10", 10);
   const maxSubmissions = parseInt(env.VELOCITY_MAX_SUBMISSIONS || "3", 10);
   const windowStart = new Date(serverMs - windowMinutes * 60 * 1000).toISOString();
-  const recentCountRow = await db
-    .prepare(
-      `SELECT COUNT(*) as cnt FROM submissions WHERE device_fingerprint_hash = ? AND created_at_server >= ?`
-    )
-    .bind(deviceHash, windowStart)
-    .first<{ cnt: number }>();
-  const recentCount = recentCountRow?.cnt ?? 0;
-  const highVelocity = recentCount >= maxSubmissions;
-  if (highVelocity) {
-    flags.push("FLAG_HIGH_VELOCITY_DEVICE");
-    riskScore += 30;
-  }
-
-  // --- Layer 4: same device used with a different contact number (HARD BLOCK upstream) ---
-  // Match by fingerprint hash OR by installId in device_raw_json (covers hash-version changes).
-  // Compare normalized mobiles so formatting differences cannot bypass the block.
-  let multiMobileDevice = false;
   const installIdFromInput = (input as any).installId ? String((input as any).installId).trim() : "";
   const mobileNorm = normalizeMobile(mobileNumber);
-  if (deviceHash && mobileNorm) {
-    let priorMobiles: string[] = [];
+  const ipWindowMinutes = parseInt(env.IP_VELOCITY_WINDOW_MINUTES || "10", 10);
+  const ipMaxSubmissions = parseInt(env.IP_VELOCITY_MAX_SUBMISSIONS || "5", 10);
+  const ipWindowStart = new Date(serverMs - ipWindowMinutes * 60 * 1000).toISOString();
+
+  const velocityPromise = deviceHash
+    ? db
+        .prepare(
+          `SELECT COUNT(*) as cnt FROM submissions WHERE device_fingerprint_hash = ? AND created_at_server >= ?`
+        )
+        .bind(deviceHash, windowStart)
+        .first<{ cnt: number }>()
+    : Promise.resolve(null);
+
+  const multiMobilePromise = (async (): Promise<string[]> => {
+    if (!deviceHash || !mobileNorm) return [];
     if (installIdFromInput) {
       const { results: rows } = await db
         .prepare(
@@ -234,20 +231,44 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
         )
         .bind(deviceHash, installIdFromInput)
         .all<{ m: string }>();
-      priorMobiles = (rows || []).map((r) => r.m);
-    } else {
-      const { results: rows } = await db
-        .prepare(
-          `SELECT DISTINCT mobile_number AS m
-           FROM submissions
-           WHERE device_fingerprint_hash = ?
-             AND mobile_number IS NOT NULL
-             AND length(trim(mobile_number)) > 0`
-        )
-        .bind(deviceHash)
-        .all<{ m: string }>();
-      priorMobiles = (rows || []).map((r) => r.m);
+      return (rows || []).map((r) => r.m);
     }
+    const { results: rows } = await db
+      .prepare(
+        `SELECT DISTINCT mobile_number AS m
+         FROM submissions
+         WHERE device_fingerprint_hash = ?
+           AND mobile_number IS NOT NULL
+           AND length(trim(mobile_number)) > 0`
+      )
+      .bind(deviceHash)
+      .all<{ m: string }>();
+    return (rows || []).map((r) => r.m);
+  })();
+
+  const ipPromise =
+    clientIp && clientIp !== "unknown"
+      ? db
+          .prepare(`SELECT COUNT(*) as cnt FROM submissions WHERE client_ip = ? AND created_at_server >= ?`)
+          .bind(clientIp, ipWindowStart)
+          .first<{ cnt: number }>()
+      : Promise.resolve(null);
+
+  const [recentCountRow, priorMobiles, ipCountRow] = await Promise.all([
+    velocityPromise,
+    multiMobilePromise,
+    ipPromise,
+  ]);
+
+  const recentCount = recentCountRow?.cnt ?? 0;
+  const highVelocity = recentCount >= maxSubmissions;
+  if (highVelocity) {
+    flags.push("FLAG_HIGH_VELOCITY_DEVICE");
+    riskScore += 30;
+  }
+
+  let multiMobileDevice = false;
+  if (priorMobiles.length > 0) {
     const otherNorms = new Set(
       priorMobiles.map(normalizeMobile).filter((m) => m && m !== mobileNorm)
     );
@@ -258,17 +279,9 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
     }
   }
 
-  // --- Layer 5: IP-based rate limiting (soft signal — IPs are often shared: dealer wifi, mobile NAT) ---
   let highVelocityIp = false;
-  if (clientIp && clientIp !== "unknown") {
-    const ipWindowMinutes = parseInt(env.IP_VELOCITY_WINDOW_MINUTES || "10", 10);
-    const ipMaxSubmissions = parseInt(env.IP_VELOCITY_MAX_SUBMISSIONS || "5", 10);
-    const ipWindowStart = new Date(serverMs - ipWindowMinutes * 60 * 1000).toISOString();
-    const ipCountRow = await db
-      .prepare(`SELECT COUNT(*) as cnt FROM submissions WHERE client_ip = ? AND created_at_server >= ?`)
-      .bind(clientIp, ipWindowStart)
-      .first<{ cnt: number }>();
-    const ipCount = ipCountRow?.cnt ?? 0;
+  if (ipCountRow) {
+    const ipCount = ipCountRow.cnt ?? 0;
     highVelocityIp = ipCount >= ipMaxSubmissions;
     if (highVelocityIp) {
       flags.push("FLAG_HIGH_VELOCITY_IP");

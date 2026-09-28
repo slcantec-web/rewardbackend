@@ -333,26 +333,31 @@ app.post("/api/submissions", async (c) => {
 
   const submissionId = genSubmissionId();
   const nowIso = new Date().toISOString();
-
-  // --- Store bill image in R2 ---
-  const imageBytes = base64ToBytes(payload.billImageBase64);
-  const r2Key = `bills/${submissionId}.jpg`;
-  await env.BILL_IMAGES.put(r2Key, imageBytes, { httpMetadata: { contentType: "image/jpeg" } });
-
-  // --- Compute hashes ---
-  const imageHash = await perceptualHashFromBytes(imageBytes); // exact-byte hash (SHA-256)
-  const nearHash = await computeNearDuplicateHash(imageBytes); // near-duplicate perceptual hash (may be null)
-  const deviceHash = await deviceFingerprintHash(payload.device || {});
   const clientIp = resolveClientIp(c);
-
-  // --- Look up dealer location for geofence ---
-  const dealer = await env.DB.prepare(`SELECT latitude, longitude FROM dealers WHERE id = ?`)
-    .bind(payload.dealerId)
-    .first<{ latitude: number | null; longitude: number | null }>();
-
-  // --- Fraud evaluation ---
   const clientInstallId = String((payload.device as any)?.installId || "").trim();
 
+  // --- Decode once, then run independent work in parallel (R2 + SHA-256 + device + dealer) ---
+  const imageBytes = base64ToBytes(payload.billImageBase64);
+  const r2Key = `bills/${submissionId}.jpg`;
+
+  const [imageHash, deviceHash, dealer] = await Promise.all([
+    perceptualHashFromBytes(imageBytes), // exact-byte SHA-256
+    deviceFingerprintHash(payload.device || {}),
+    env.DB.prepare(`SELECT latitude, longitude FROM dealers WHERE id = ?`)
+      .bind(payload.dealerId)
+      .first<{ latitude: number | null; longitude: number | null }>(),
+    env.BILL_IMAGES.put(r2Key, imageBytes, { httpMetadata: { contentType: "image/jpeg" } }).then(() => null),
+  ]).then(([h, d, dl]) => [h, d, dl] as const);
+
+  // Exact-duplicate check early — skip expensive pHash JPEG decode when already a hard duplicate
+  const exactDup = await env.DB.prepare(`SELECT id FROM submissions WHERE bill_image_hash = ? LIMIT 1`)
+    .bind(imageHash)
+    .first<{ id: string }>();
+
+  // pHash only when not an exact re-upload (saves CPU on the common retry path)
+  const nearHash = exactDup ? null : await computeNearDuplicateHash(imageBytes);
+
+  // --- Fraud evaluation ---
   const fraud = await evaluateFraud({
     env,
     db: env.DB,
