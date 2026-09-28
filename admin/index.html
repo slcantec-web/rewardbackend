@@ -1203,6 +1203,35 @@ function clearSessionAndReload() {
   location.replace("login.html");
 }
 
+/** Customer Claim Portal base URL (never admin origin — separate Pages project) */
+function claimPortalBase() {
+  return (window.CLAIM_PORTAL_URL || "").replace(/\/$/, "");
+}
+
+function claimPortalUrl(path) {
+  const base = claimPortalBase();
+  if (!base) return "";
+  const p = path && path.startsWith("/") ? path : "/" + (path || "");
+  return base + (path ? p : "");
+}
+
+(function wireClaimPortalLink() {
+  const el = document.getElementById("linkClaimPortal");
+  if (!el) return;
+  const base = claimPortalBase();
+  if (base) {
+    el.href = base + "/";
+    el.style.display = "";
+  } else {
+    el.href = "#";
+    el.title = "Set CLAIM_PORTAL_URL in admin/config.js";
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      showToast("CLAIM_PORTAL_URL is not set in admin/config.js", "warning");
+    });
+  }
+})();
+
 function showApp() {
   document.getElementById("app").style.display = "block";
   document.getElementById("userNameLabel").textContent = currentUsername;
@@ -2829,7 +2858,7 @@ async function loadQrTab() {
           </div>
           <div class="form-group" style="grid-column: span 2;">
             <label>Target URL</label>
-            <input type="text" id="qrTargetUrl" value="${window.location.origin}/" />
+            <input type="text" id="qrTargetUrl" value="${claimPortalBase() ? claimPortalBase() + '/' : ''}" placeholder="https://your-claim-portal/" />
           </div>
         </div>
         <button class="btn btn-primary" onclick="generateQr()">Generate Print Asset</button>
@@ -2855,8 +2884,14 @@ async function loadQrTab() {
 function updateQrPlaceholder() {
   const type = document.getElementById("qrType").value;
   const target = document.getElementById("qrTargetUrl");
-  if (type === "track") target.value = `${window.location.origin}/track.html`;
-  else target.value = `${window.location.origin}/`;
+  const base = claimPortalBase();
+  if (!base) {
+    target.value = "";
+    target.placeholder = "Set CLAIM_PORTAL_URL in admin/config.js";
+    return;
+  }
+  if (type === "track") target.value = `${base}/track.html`;
+  else target.value = `${base}/`;
 }
 
 async function fetchQrHistory() {
@@ -2997,8 +3032,11 @@ async function openCustomerDetail(mobileOrId) {
     document.getElementById("drawerTitle").textContent = d.name || c.contactPhone || c.mobile || "Customer Dossier";
     document.getElementById("drawerSubtitle").textContent = d.customer_code ? `${d.customer_code} · ${c.contactPhone || c.mobile}` : (c.contactPhone || c.mobile);
 
-    // Generate store-specific QR link
-    const storeClaimUrl = `${window.location.origin}/?dealer=${encodeURIComponent(d.id || '')}`;
+    // Generate store-specific QR link on the Claim Portal (not admin origin)
+    const portalBase = claimPortalBase();
+    const storeClaimUrl = portalBase
+      ? `${portalBase}/?dealer=${encodeURIComponent(d.id || '')}`
+      : `(set CLAIM_PORTAL_URL in config.js)/?dealer=${encodeURIComponent(d.id || '')}`;
     let storeQrSvg = "";
     try {
       const qr = qrcode(0, 'M');

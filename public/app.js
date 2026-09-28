@@ -164,8 +164,33 @@ async function init() {
     if (list) list.innerHTML = `<div style="color:#b91c1c;font-size:0.88rem;padding:8px 0;">Could not load products. Check connection and try again.</div>`;
   }
 
+  // Store counter QR / admin deep-link: ?dealer=<dealerId>
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const dealerId = (params.get("dealer") || "").trim();
+    if (dealerId) {
+      await preselectDealerFromUrl(dealerId);
+    }
+  } catch (e) {
+    console.warn("dealer preselect failed", e);
+  }
+
   if (!onDesktop) {
     requestLocation();
+  }
+}
+
+async function preselectDealerFromUrl(dealerId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/dealers?id=${encodeURIComponent(dealerId)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = data.dealers || [];
+    if (!list.length) return;
+    dealers = list;
+    selectDealerById(list[0].id);
+  } catch (e) {
+    console.warn("preselectDealerFromUrl", e);
   }
 }
 

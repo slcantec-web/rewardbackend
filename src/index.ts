@@ -84,14 +84,28 @@ app.get("/api/products", async (c) => {
 
 app.get("/api/dealers", async (c) => {
   const q = (c.req.query("q") || "").trim();
+  const idParam = (c.req.query("id") || "").trim();
+
+  // Exact id lookup (used by store counter QR / ?dealer= preselect)
+  if (idParam) {
+    const row = await c.env.DB.prepare(
+      `SELECT id, customer_code, name, city, address, latitude, longitude
+       FROM dealers WHERE id = ? AND active = 1 LIMIT 1`
+    )
+      .bind(idParam)
+      .first();
+    return c.json({ dealers: row ? [row] : [] });
+  }
+
   const like = `%${q}%`;
-  // Search by name, customer code, city, or address/location text
+  // Search by name, customer code, city, address — or exact id when pasted as query
   const { results } = await c.env.DB.prepare(
     `SELECT id, customer_code, name, city, address, latitude, longitude
      FROM dealers
      WHERE active = 1
        AND (
          ? = ''
+         OR id = ?
          OR name LIKE ?
          OR IFNULL(customer_code, '') LIKE ?
          OR IFNULL(city, '') LIKE ?
@@ -99,14 +113,15 @@ app.get("/api/dealers", async (c) => {
        )
      ORDER BY
        CASE
-         WHEN ? != '' AND IFNULL(customer_code, '') = ? THEN 0
-         WHEN ? != '' AND name LIKE ? THEN 1
-         ELSE 2
+         WHEN ? != '' AND id = ? THEN 0
+         WHEN ? != '' AND IFNULL(customer_code, '') = ? THEN 1
+         WHEN ? != '' AND name LIKE ? THEN 2
+         ELSE 3
        END,
        name
      LIMIT 30`
   )
-    .bind(q, like, like, like, like, q, q, q, `${q}%`)
+    .bind(q, q, like, like, like, like, q, q, q, q, q, `${q}%`)
     .all();
   return c.json({ dealers: results });
 });

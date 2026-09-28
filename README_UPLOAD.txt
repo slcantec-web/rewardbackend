@@ -1,31 +1,33 @@
-FEATURE: End-customer security dossier + blocked-attempt logging
-================================================================
+FIX: Claim Portal links broken in Admin panel
+=============================================
 
-WHAT YOU GET
-1) security_events table (auto-created) logs:
-   - DAILY_CLAIM_LIMIT     — mobile hit max claims per day (default 3)
-   - DEVICE_MULTI_MOBILE   — same phone used with different contact numbers
-   - BANK_ACCOUNT_COLLISION — same bank account tried on another mobile
-   - DESKTOP_BLOCKED       — PC / desktop claim attempt
+ROOT CAUSE
+- Admin and Claim Portal are SEPARATE domains.
+- Admin was building links with window.location.origin (admin domain),
+  so "Claim Portal", store QR, and QR tab pointed at admin pages — broken.
 
-2) Daily claim limit is now ENFORCED server-side (was only UI text).
-   Override with env DAILY_CLAIM_LIMIT if needed.
+FIXES
+1) admin/index.html
+   - Claim Portal nav link → CLAIM_PORTAL_URL from config.js
+   - Store counter QR / dealer claim link → CLAIM_PORTAL_URL/?dealer=ID
+   - QR Assets tab defaults → claim portal home / track.html
 
-3) Customer profile API includes:
-   - security.summary (counts)
-   - security.events (recent attempts)
-   - security.bank_collisions
-   - security.claims_today / daily_limit
-   - fraudHistory (claims with flags / elevated risk)
+2) admin/finance.html
+   - Claim Portal nav link no longer falls back to "/" (admin root)
 
-4) Admin Customer Dossier drawer shows a "Security & Risk Report" section.
+3) public/app.js (Claim Portal)
+   - Reads ?dealer=<id> and pre-selects that store
+
+4) src/index.ts (Worker)
+   - GET /api/dealers?id=... exact lookup for store QR deep-links
+
+VERIFY admin/config.js has:
+  CLAIM_PORTAL_URL = "https://rewards.cloudebase.dpdns.org"
+  (or your real claim portal domain)
 
 UPLOAD
-  Worker / API project:
-    src/fraud.ts
-    src/index.ts
-    src/extras.ts
-  Admin static pages:
-    admin/index.html
+  Admin Pages:   admin/index.html, admin/finance.html
+  Claim Portal:  public/app.js
+  Worker:        src/index.ts
 
-Redeploy Worker + Admin pages. Hard refresh admin after deploy.
+Redeploy all three if needed. Hard refresh admin (Ctrl+Shift+R).

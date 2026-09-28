@@ -757,7 +757,16 @@ let cachedSubmissions = [];
   const el = document.getElementById("linkClaimPortal");
   if (!el) return;
   const base = (window.CLAIM_PORTAL_URL || "").replace(/\/$/, "");
-  el.href = base ? base + "/" : "/";
+  if (base) {
+    el.href = base + "/";
+  } else {
+    el.href = "#";
+    el.title = "Set CLAIM_PORTAL_URL in admin/config.js";
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (typeof showToast === "function") showToast("CLAIM_PORTAL_URL is not set in admin/config.js", "warning");
+    });
+  }
 })();
 
 document.getElementById("logoutBtn").addEventListener("click", () => {
