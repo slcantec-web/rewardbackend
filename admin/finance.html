@@ -620,6 +620,32 @@
   </div>
 </div>
 
+<!-- Modal: Request bank details (share secure invite link) -->
+<div class="modal-overlay" id="bankInviteModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title">Request Bank Details</h3>
+      <button type="button" class="btn-close" onclick="closeBankInviteModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.85rem;color:#64748b;margin:0 0 12px;">
+        Secure link for <b id="bankInviteMobileLabel">—</b> (valid 7 days). Customer uses this once to add their bank account for payout.
+      </p>
+      <div class="form-group">
+        <label>Invite link</label>
+        <input type="text" id="bankInviteUrl" readonly autocomplete="off" style="font-family:ui-monospace,monospace;font-size:0.82rem;" />
+        <div class="hint">One mobile = one bank account. Link expires in 7 days.</div>
+      </div>
+      <div id="bankInviteError" class="banner"></div>
+    </div>
+    <div class="modal-footer" style="flex-wrap:wrap;">
+      <button type="button" class="btn btn-secondary" onclick="closeBankInviteModal()">Close</button>
+      <button type="button" class="btn btn-secondary" id="btnBankInviteCopy">Copy link</button>
+      <button type="button" class="btn btn-primary" id="btnBankInviteWhatsApp">Open WhatsApp</button>
+    </div>
+  </div>
+</div>
+
 <!-- Main Finance Interface (auth required — unauthenticated users go to login.html) -->
 <div id="app" style="display:flex;height:100vh;flex-direction:column;">
   <!-- Enterprise Header -->
@@ -740,7 +766,8 @@ document.getElementById("logoutBtn").addEventListener("click", () => {
 });
 
 function authHeaders() {
-  return { "Authorization": `Bearer ${token}
+  return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
+}
 
 /** Native in-app toast — replaces browser alert() for app-like UX */
 function showToast(message, type = "info", durationMs = 4200) {
@@ -759,9 +786,6 @@ function showToast(message, type = "info", durationMs = 4200) {
   stack.appendChild(el);
   const t = setTimeout(remove, durationMs);
   el.addEventListener("mouseenter", () => clearTimeout(t));
-}
-
-`, "Content-Type": "application/json" };
 }
 
 function clearSessionAndReload() {
@@ -1218,39 +1242,72 @@ async function createBankInvite(mobile) {
   return { ...data, url };
 }
 
+let _bankInviteState = { mobile: null, url: null, text: null };
+
+function closeBankInviteModal() {
+  document.getElementById("bankInviteModal")?.classList.remove("active");
+  _bankInviteState = { mobile: null, url: null, text: null };
+}
+
 async function shareBankInvite(mobile) {
   if (!mobile || mobile === "—" || mobile === "undefined") {
     showToast("Bank details invites are only for end customers with a mobile number.", "warning");
     return;
   }
+  const errEl = document.getElementById("bankInviteError");
+  if (errEl) {
+    errEl.className = "banner";
+    errEl.textContent = "";
+  }
+  document.getElementById("bankInviteMobileLabel").textContent = mobile;
+  document.getElementById("bankInviteUrl").value = "Generating secure link…";
+  document.getElementById("btnBankInviteCopy").disabled = true;
+  document.getElementById("btnBankInviteWhatsApp").disabled = true;
+  document.getElementById("bankInviteModal").classList.add("active");
+
   try {
     const inv = await createBankInvite(mobile);
     const text = `CanTec Rewards: please add your bank account for payout using this secure link (valid 7 days):\n${inv.url}`;
-    const wa = toWhatsAppPhone(mobile);
-    const choice = prompt(
-      `Bank details link for ${mobile}:\n\n${inv.url}\n\n` +
-      `OK = copy link to clipboard\n` +
-      `Or type WA to open WhatsApp with message`,
-      "OK"
-    );
-    if (choice === null) return;
-    if (String(choice).trim().toUpperCase() === "WA") {
-      const waUrl = wa
-        ? `https://wa.me/${wa}?text=${encodeURIComponent(text)}`
-        : `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(waUrl, "_blank", "noopener");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(inv.url);
-      showToast("Link copied to clipboard.\n\n" + inv.url, "success");
-    } catch {
-      prompt("Copy this link:", inv.url);
-    }
+    _bankInviteState = { mobile, url: inv.url, text };
+    document.getElementById("bankInviteUrl").value = inv.url;
+    document.getElementById("btnBankInviteCopy").disabled = false;
+    document.getElementById("btnBankInviteWhatsApp").disabled = false;
   } catch (e) {
+    if (errEl) {
+      errEl.className = "banner err";
+      errEl.textContent = e.message || String(e);
+    }
+    document.getElementById("bankInviteUrl").value = "";
     showToast(e.message || String(e), "error");
   }
 }
+
+document.getElementById("btnBankInviteCopy")?.addEventListener("click", async () => {
+  const url = _bankInviteState.url;
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast("Link copied to clipboard.", "success");
+  } catch {
+    // Fallback: select the input so user can Ctrl+C
+    const input = document.getElementById("bankInviteUrl");
+    if (input) {
+      input.focus();
+      input.select();
+    }
+    showToast("Could not auto-copy. Link is selected — press Ctrl+C / Cmd+C.", "warning");
+  }
+});
+
+document.getElementById("btnBankInviteWhatsApp")?.addEventListener("click", () => {
+  const { mobile, text } = _bankInviteState;
+  if (!text) return;
+  const wa = toWhatsAppPhone(mobile);
+  const waUrl = wa
+    ? `https://wa.me/${wa}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(waUrl, "_blank", "noopener");
+});
 
 
 // -------------------------------------------------------------

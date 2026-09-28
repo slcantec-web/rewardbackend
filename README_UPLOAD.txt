@@ -1,30 +1,25 @@
-NATIVE APP TOASTS + EDIT MODALS (Customer Master / Item Master)
-===============================================================
+FIX: Bank details request — proper modal (no browser prompt/alert)
+=================================================================
 
-WHAT THIS DOES
-1) All browser alert() popups → native in-app toast notifications
-   (dark card, top-right, success/error/warning icons).
+WHY
+- "Request bank details" used browser prompt() for the invite link and
+  a second prompt() as clipboard fallback. That felt like a system alert,
+  not part of the app.
 
-2) Customer Master + Item Master EDIT no longer use browser prompt() dialogs.
-   They open proper in-app modal forms:
-   - Edit Customer: name, phone, city
-   - Set / Edit GPS: maps link or coordinates + Clear GPS
-   - Edit Item: product name, unit packaging
+NOW
+- Finance portal (admin/finance.html) and Admin panel (admin/index.html)
+  open an in-app modal:
+  - Shows mobile + secure invite link
+  - Copy link button
+  - Open WhatsApp button (pre-filled message)
+  - Close
+- No browser alert/prompt for this flow.
+- Also fixed broken authHeaders() in finance.html (toast code had been
+  inserted mid-function).
 
-FILES TO UPLOAD (drag-drop into matching paths in GitHub)
-
-  admin/index.html    →  admin/index.html
+UPLOAD (Admin/Finance Pages project)
   admin/finance.html  →  admin/finance.html
-  public/app.js       →  public/app.js
+  admin/index.html    →  admin/index.html
 
-DEPLOY
-1) Admin/Finance Pages: admin/index.html + admin/finance.html
-2) Claim portal Pages: public/app.js
-
+Redeploy the Admin/Finance static pages (not only the Worker).
 Hard refresh after deploy (Ctrl+Shift+R).
-
-TEST
-- Customer Master → Edit → modal form (not browser alert)
-- Customer Master → Set GPS / Edit GPS → modal form
-- Item Master → Edit → modal form
-- Save → green success toast
