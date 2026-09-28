@@ -1110,19 +1110,206 @@ function renderReview(data) {
           `}
         </div>
 
-        <!-- Customer Ledger Snapshot -->
+        <!-- End-customer summary + history (for finance review) -->
         <div class="panel">
-          <div class="panel-title">👛 Customer Financial Dossier</div>
-          <div class="detail-row"><span class="detail-label">Store / Dealer</span><span class="detail-val">${s.dealer_name || 'Direct Customer'}</span></div>
-          <div class="detail-row"><span class="detail-label">Current Wallet Balance</span><span class="detail-val mono" style="color:var(--primary);font-size:1.05rem;">LKR ${Number(wallet.balance_lkr || 0).toLocaleString()}</span></div>
-          <div class="detail-row"><span class="detail-label">Approved Claims History</span><span class="detail-val mono">LKR ${Number(stats.approved_lkr || 0).toLocaleString()} (${stats.approved || 0} claims)</span></div>
-          <div class="detail-row"><span class="detail-label">Bank Account Registered</span><span class="detail-val">${bank?.account_name ? `✓ ${bank.bank_name} (${bank.account_number})` : `<span style="color:var(--warning);">No bank saved</span> <button class="btn btn-primary btn-sm" style="margin-left:8px;" onclick="shareBankInvite('${s.mobile_number}')">Request bank details</button>`}</span></div>
+          <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>👤 End customer summary</span>
+            <button type="button" class="btn btn-outline btn-sm" onclick="toggleEndCustomerHistory('${s.mobile_number}')">View claim history</button>
+          </div>
+          <div class="detail-row"><span class="detail-label">End customer name</span><span class="detail-val">${(cust.endCustomerName || bank?.account_name) ? (cust.endCustomerName || bank.account_name) : '<span style="color:var(--warning);">Not collected yet</span>'}</span></div>
+          <div class="detail-row"><span class="detail-label">Contact mobile</span><span class="detail-val mono">${s.mobile_number || '—'}</span></div>
+          <div class="detail-row"><span class="detail-label">Store / dealer (this claim)</span><span class="detail-val">${s.dealer_name || 'Direct Customer'}</span></div>
+          <div class="detail-row"><span class="detail-label">Wallet balance</span><span class="detail-val mono" style="color:var(--primary);font-size:1.05rem;">LKR ${Number(wallet.balance_lkr || 0).toLocaleString()}</span></div>
+          <div class="detail-row"><span class="detail-label">Claims total</span><span class="detail-val">${Number(stats.total || 0)} total · <span style="color:var(--success);">${Number(stats.approved || 0)} approved</span> · <span style="color:var(--warning);">${Number(stats.pending || 0)} pending</span> · <span style="color:var(--danger);">${Number(stats.rejected || 0)} rejected</span></div>
+          <div class="detail-row"><span class="detail-label">Approved rewards</span><span class="detail-val mono">LKR ${Number(stats.approved_lkr || 0).toLocaleString()}</span></div>
+          <div class="detail-row"><span class="detail-label">Pending claimed</span><span class="detail-val mono">LKR ${Number(stats.pending_lkr || 0).toLocaleString()}</span></div>
+          <div class="detail-row"><span class="detail-label">Paid out</span><span class="detail-val mono">LKR ${Number((cust.paidOut && cust.paidOut.total) || 0).toLocaleString()} (${Number((cust.paidOut && cust.paidOut.n) || 0)} batches)</span></div>
+          <div class="detail-row"><span class="detail-label">Max risk (history)</span><span class="detail-val">${Number(stats.max_risk || 0) >= 60 ? '<span class="status-chip chip-danger">High ' + Number(stats.max_risk || 0) + '</span>' : Number(stats.max_risk || 0) >= 25 ? '<span class="status-chip chip-warning">' + Number(stats.max_risk || 0) + '</span>' : Number(stats.max_risk || 0)}</span></div>
+          <div class="detail-row"><span class="detail-label">Bank on file</span><span class="detail-val">${bank?.account_name ? `✓ ${bank.account_name} — ${bank.bank_name} (${bank.account_number})${bank.branch_name ? ' · ' + bank.branch_name : ''}` : `<span style="color:var(--warning);">No bank saved</span> <button class="btn btn-primary btn-sm" style="margin-left:8px;" onclick="shareBankInvite('${s.mobile_number}')">Request bank details</button>`}</span></div>
+          ${(cust.dealers && cust.dealers.length) ? `<div class="detail-row"><span class="detail-label">Stores used</span><span class="detail-val">${cust.dealers.map(d => (d.name || '—') + (d.city ? ' (' + d.city + ')' : '') + ' · ' + d.claims + ' claims').join('<br>')}</span></div>` : ''}
+          ${(() => {
+            const sec = cust.security;
+            const sm = sec && sec.summary;
+            if (!sm) return '';
+            const bits = [];
+            if (sm.daily_limit_hits) bits.push(sm.daily_limit_hits + ' daily-limit hits');
+            if (sm.bank_collision_attempts) bits.push(sm.bank_collision_attempts + ' bank collision');
+            if (sm.device_multi_mobile_blocks) bits.push(sm.device_multi_mobile_blocks + ' multi-mobile device');
+            if (sm.high_velocity_flags) bits.push(sm.high_velocity_flags + ' velocity flags');
+            if (sec.claims_today != null) bits.push(sec.claims_today + '/' + (sec.daily_limit || 3) + ' claims today');
+            if (!bits.length) return '';
+            return `<div class="detail-row"><span class="detail-label">Security signals</span><span class="detail-val" style="color:var(--warning);">${bits.join(' · ')}</span></div>`;
+          })()}
+
+          <div id="endCustomerHistoryPanel" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+            <div style="font-size:0.78rem;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);">Claim history (last ${Math.min(15, (cust.recent || []).length)} of this mobile)</div>
+            ${!(cust.recent && cust.recent.length) ? `<div style="font-size:0.85rem;color:var(--text-muted);">No prior claims found for this mobile.</div>` : `
+              <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+                  <thead>
+                    <tr style="text-align:left;border-bottom:1px solid var(--border);color:var(--text-muted);">
+                      <th style="padding:6px 4px;">ID</th>
+                      <th style="padding:6px 4px;">Date</th>
+                      <th style="padding:6px 4px;">Status</th>
+                      <th style="padding:6px 4px;">Claimed</th>
+                      <th style="padding:6px 4px;">Approved</th>
+                      <th style="padding:6px 4px;">Risk</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${(cust.recent || []).map(r => `
+                      <tr style="border-bottom:1px solid var(--border);${r.id === s.id ? 'background:#f0fdfa;' : ''}">
+                        <td style="padding:6px 4px;" class="mono">${r.id === s.id ? '<b>' + r.id + '</b> (this)' : r.id}</td>
+                        <td style="padding:6px 4px;">${r.created_at_server ? new Date(r.created_at_server).toLocaleDateString() : '—'}</td>
+                        <td style="padding:6px 4px;"><span class="status-chip ${r.status === 'APPROVED' ? 'chip-success' : r.status === 'REJECTED' ? 'chip-danger' : 'chip-warning'}" style="font-size:0.7rem;">${String(r.status || '').replace('_',' ')}</span></td>
+                        <td style="padding:6px 4px;" class="mono">${Number(r.total_claimed_reward_lkr || 0).toFixed(0)}</td>
+                        <td style="padding:6px 4px;" class="mono">${r.total_approved_reward_lkr != null ? Number(r.total_approved_reward_lkr).toFixed(0) : '—'}</td>
+                        <td style="padding:6px 4px;">${Number(r.risk_score || 0)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `}
+            ${(cust.fraudHistory && cust.fraudHistory.length) ? `
+              <div style="font-size:0.78rem;font-weight:700;margin:14px 0 8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);">Flagged / higher-risk claims</div>
+              <div style="font-size:0.8rem;">
+                ${cust.fraudHistory.slice(0, 8).map(f => `
+                  <div style="padding:6px 0;border-bottom:1px solid var(--border);">
+                    <span class="mono">${f.id}</span> · risk ${f.risk_score || 0} · ${f.status || ''}
+                    <div style="color:var(--text-muted);font-size:0.75rem;">${f.fraud_flags || '—'}</div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
         </div>
       </div>
     </div>
   `;
+  window.__lastReviewCustomer = cust;
+  window.__lastReviewSubmissionId = s.id;
   recalcTotalReward();
 }
+
+function toggleEndCustomerHistory(mobile) {
+  const panel = document.getElementById("endCustomerHistoryPanel");
+  if (!panel) return;
+  const open = panel.style.display === "none" || !panel.style.display;
+  panel.style.display = open ? "block" : "none";
+  // If empty and we need a fresh fetch (edge case)
+  if (open && !window.__lastReviewCustomer && mobile) {
+    loadEndCustomerHistory(mobile);
+  }
+}
+
+async function loadEndCustomerHistory(mobile) {
+  const panel = document.getElementById("endCustomerHistoryPanel");
+  if (!panel) return;
+  panel.style.display = "block";
+  panel.innerHTML = `<div style="padding:12px;color:var(--text-muted);font-size:0.85rem;">Loading history for ${mobile}…</div>`;
+  try {
+    const res = await fetch(`${API_BASE}/api/finance/customers/${encodeURIComponent(mobile)}`, { headers: authHeaders() });
+    if (res.status === 401) { clearSessionAndReload(); return; }
+    const data = await res.json();
+    const cust = data.customer || {};
+    window.__lastReviewCustomer = cust;
+    const recent = cust.recent || [];
+    panel.innerHTML = `
+      <div style="font-size:0.78rem;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);">Claim history</div>
+      ${!recent.length ? `<div style="font-size:0.85rem;color:var(--text-muted);">No claims found.</div>` : `
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+            <thead>
+              <tr style="text-align:left;border-bottom:1px solid var(--border);color:var(--text-muted);">
+                <th style="padding:6px 4px;">ID</th>
+                <th style="padding:6px 4px;">Date</th>
+                <th style="padding:6px 4px;">Status</th>
+                <th style="padding:6px 4px;">Claimed</th>
+                <th style="padding:6px 4px;">Approved</th>
+                <th style="padding:6px 4px;">Risk</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${recent.map(r => `
+                <tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:6px 4px;" class="mono">${r.id}</td>
+                  <td style="padding:6px 4px;">${r.created_at_server ? new Date(r.created_at_server).toLocaleDateString() : '—'}</td>
+                  <td style="padding:6px 4px;">${r.status || '—'}</td>
+                  <td style="padding:6px 4px;" class="mono">${Number(r.total_claimed_reward_lkr || 0).toFixed(0)}</td>
+                  <td style="padding:6px 4px;" class="mono">${r.total_approved_reward_lkr != null ? Number(r.total_approved_reward_lkr).toFixed(0) : '—'}</td>
+                  <td style="padding:6px 4px;">${Number(r.risk_score || 0)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `}
+    `;
+  } catch (e) {
+    panel.innerHTML = `<div style="color:var(--danger);font-size:0.85rem;">Could not load customer history.</div>`;
+  }
+}
+
+async function openFinanceCustomerHistory(mobile) {
+  if (!mobile) return;
+  // Reuse review panel area if on queue, else alert-style panel in customers view
+  const host = document.getElementById("reviewPanel") || document.getElementById("customersPanel") || document.body;
+  let box = document.getElementById("financeHistoryModal");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "financeHistoryModal";
+    box.style.cssText = "position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
+    box.onclick = (e) => { if (e.target === box) box.remove(); };
+    document.body.appendChild(box);
+  }
+  box.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:85vh;overflow:auto;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <b>End customer history · <span class="mono">${mobile}</span></b>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('financeHistoryModal').remove()">Close</button>
+    </div>
+    <div id="financeHistoryBody" style="color:var(--text-muted);">Loading…</div>
+  </div>`;
+  try {
+    const res = await fetch(`${API_BASE}/api/finance/customers/${encodeURIComponent(mobile)}`, { headers: authHeaders() });
+    if (res.status === 401) { clearSessionAndReload(); return; }
+    const data = await res.json();
+    const c = data.customer || {};
+    const st = c.stats || {};
+    const recent = c.recent || [];
+    const body = document.getElementById("financeHistoryBody");
+    body.innerHTML = `
+      <div style="font-size:0.9rem;margin-bottom:12px;">
+        <div><b>Name:</b> ${c.endCustomerName || '—'}</div>
+        <div><b>Wallet:</b> LKR ${Number((c.wallet && c.wallet.balance_lkr) || 0).toLocaleString()}</div>
+        <div><b>Claims:</b> ${st.total || 0} total · ${st.approved || 0} approved · ${st.pending || 0} pending · ${st.rejected || 0} rejected</div>
+        <div><b>Approved LKR:</b> ${Number(st.approved_lkr || 0).toLocaleString()}</div>
+        <div><b>Bank:</b> ${c.bank ? (c.bank.bank_name + ' · ' + c.bank.account_number) : 'Not on file'}</div>
+      </div>
+      <div style="font-size:0.78rem;font-weight:700;margin-bottom:6px;color:var(--text-muted);">RECENT CLAIMS</div>
+      ${!recent.length ? '<div>No claims.</div>' : `
+        <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+          <thead><tr style="text-align:left;border-bottom:1px solid #e2e8f0;color:#64748b;">
+            <th style="padding:4px;">ID</th><th style="padding:4px;">Date</th><th style="padding:4px;">Status</th><th style="padding:4px;">Claimed</th><th style="padding:4px;">Risk</th>
+          </tr></thead>
+          <tbody>
+            ${recent.map(r => `<tr style="border-bottom:1px solid #e2e8f0;">
+              <td style="padding:4px;" class="mono">${r.id}</td>
+              <td style="padding:4px;">${r.created_at_server ? new Date(r.created_at_server).toLocaleDateString() : '—'}</td>
+              <td style="padding:4px;">${r.status || ''}</td>
+              <td style="padding:4px;" class="mono">${Number(r.total_claimed_reward_lkr || 0).toFixed(0)}</td>
+              <td style="padding:4px;">${Number(r.risk_score || 0)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      `}
+    `;
+  } catch {
+    const body = document.getElementById("financeHistoryBody");
+    if (body) body.innerHTML = "Could not load history.";
+  }
+}
+
 
 function zoomBillImage() {
   const img = document.getElementById("billImage");
@@ -1388,6 +1575,7 @@ function renderFinanceSummaries() {
         ? `<span class="status-chip chip-success">✓ Bank Saved</span>`
         : `<span class="status-chip chip-warning">No Bank</span>
            <div style="margin-top:6px;">
+             <button class="btn btn-outline btn-sm" onclick="openFinanceCustomerHistory('${c.mobile_number}')">View history</button>
              <button class="btn btn-primary btn-sm" onclick="shareBankInvite('${c.mobile_number}')">Request bank details</button>
            </div>`);
     const payoutCell = isDealer
