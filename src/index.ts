@@ -7,6 +7,9 @@ import {
   deviceFingerprintHash,
   computeNearDuplicateHash,
   normalizeMobile,
+  logSecurityEvent,
+  dailyClaimLimit,
+  countClaimsToday,
 } from "./fraud";
 import { signSession, verifySession, requireRole, type SessionPayload } from "./auth";
 import { registerExtras } from "./extras";
@@ -140,12 +143,39 @@ app.post("/api/submissions", async (c) => {
     !/Android|Mobile|iPhone|iPad/i.test(ua);
   const clientSaysMobile = device.isMobile === true;
   if (desktopUa || (!mobileUa && !clientSaysMobile)) {
+    await logSecurityEvent(env.DB, {
+      eventType: "DESKTOP_BLOCKED",
+      mobile: mobileNumber,
+      clientIp: resolveClientIp(c),
+      details: { ua: ua.slice(0, 200), platform },
+    });
     return c.json(
       {
         error: "Claims must be submitted from a mobile phone at the dealer location. Desktop / PC browsers are blocked.",
         flags: ["DESKTOP_BLOCKED"],
       },
       403
+    );
+  }
+
+  // Daily claim limit per mobile (default 3 — matches public UI)
+  const dayLimit = dailyClaimLimit(env);
+  const claimsToday = await countClaimsToday(env.DB, mobileNumber);
+  if (claimsToday >= dayLimit) {
+    await logSecurityEvent(env.DB, {
+      eventType: "DAILY_CLAIM_LIMIT",
+      mobile: mobileNumber,
+      clientIp: resolveClientIp(c),
+      details: { claimsToday, limit: dayLimit },
+    });
+    return c.json(
+      {
+        error: `Daily claim limit reached for this mobile number (${dayLimit} claims per day). Try again tomorrow.`,
+        code: "DAILY_CLAIM_LIMIT",
+        claimsToday,
+        limit: dayLimit,
+      },
+      429
     );
   }
 
@@ -190,6 +220,13 @@ app.post("/api/submissions", async (c) => {
 
   // Hard block: same phone / browser already used with a different contact number
   if (fraud.multiMobileDevice) {
+    await logSecurityEvent(env.DB, {
+      eventType: "DEVICE_MULTI_MOBILE",
+      mobile: mobileNumber,
+      clientIp,
+      deviceHash,
+      details: { flags: fraud.flags, riskScore: fraud.riskScore },
+    });
     return c.json(
       {
         error:
@@ -218,6 +255,14 @@ app.post("/api/submissions", async (c) => {
       .map((r) => normalizeMobile(r.m))
       .filter((m) => m && m !== mobileNumber);
     if (other.length > 0) {
+      await logSecurityEvent(env.DB, {
+        eventType: "DEVICE_MULTI_MOBILE",
+        mobile: mobileNumber,
+        relatedMobile: other[0],
+        clientIp,
+        deviceHash,
+        details: { priorMobiles: other.slice(0, 5), source: "installId_guard" },
+      });
       return c.json(
         {
           error:

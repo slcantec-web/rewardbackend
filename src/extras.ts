@@ -10,6 +10,7 @@
 import type { Hono } from "hono";
 import type { Env, D1Database } from "./types";
 import { verifySession, requireRole, type SessionPayload } from "./auth";
+import { logSecurityEvent, securityReportForMobile, dailyClaimLimit, normalizeMobile } from "./fraud";
 
 type App = Hono<{ Bindings: Env }>;
 type Role = SessionPayload["role"];
@@ -299,6 +300,34 @@ async function customerProfile(db: D1Database, mobileOrParam: string, fullBank: 
     .bind(searchPhone, searchPhone, dealerId, dealerId)
     .first<any>();
 
+  // Security / risk dossier (rate limits, bank collisions, blocked attempts)
+  let security: any = null;
+  try {
+    const phoneForSec = searchPhone || (param.startsWith("DLR-") ? "" : param);
+    if (phoneForSec) {
+      security = await securityReportForMobile(db, phoneForSec);
+      security.daily_limit = dailyClaimLimit({} as any);
+    }
+  } catch (err) {
+    console.error("security report failed:", err);
+  }
+
+  // Fraud flags across this mobile's submissions
+  let fraudHistory: any[] = [];
+  try {
+    const { results: fr } = await db
+      .prepare(
+        `SELECT id, fraud_flags, risk_score, status, created_at_server, client_ip
+         FROM submissions
+         WHERE mobile_number = ? AND ? != ''
+           AND (fraud_flags IS NOT NULL AND fraud_flags != '' OR risk_score >= 30)
+         ORDER BY created_at_server DESC LIMIT 20`
+      )
+      .bind(searchPhone, searchPhone)
+      .all<any>();
+    fraudHistory = fr || [];
+  } catch { /* ignore */ }
+
   return {
     mobile: effectiveKey,
     contactPhone: contactPhone || searchPhone || null,
@@ -311,6 +340,8 @@ async function customerProfile(db: D1Database, mobileOrParam: string, fullBank: 
     devices: devices || [],
     recent: recent || [],
     bank: bank ? { ...bank, account_number: fullBank ? bank.account_number : maskAccount(bank.account_number) } : null,
+    security,
+    fraudHistory,
   };
 }
 
@@ -1344,6 +1375,14 @@ export function registerExtras(app: App) {
       .bind(accountNumber, b.mobile)
       .first<{ mobile_number: string }>();
     if (taken) {
+      const otherMob = (taken as any).mobile_number || null;
+      const hint = accountNumber.length > 4 ? "****" + accountNumber.slice(-4) : "****";
+      await logSecurityEvent(c.env.DB, {
+        eventType: "BANK_ACCOUNT_COLLISION",
+        mobile: b.mobile,
+        relatedMobile: otherMob,
+        details: { account_hint: hint, source: "track_bank_details" },
+      });
       return c.json({ error: "This bank account is already registered to another mobile number. One bank account can only be linked to one mobile." }, 409);
     }
 
@@ -1531,8 +1570,15 @@ export function registerExtras(app: App) {
       `SELECT mobile_number FROM customer_bank_details WHERE account_number = ? AND mobile_number != ? LIMIT 1`
     )
       .bind(accountNumber, inv.mobile_number)
-      .first();
+      .first<{ mobile_number: string }>();
     if (taken) {
+      const hint = accountNumber.length > 4 ? "****" + accountNumber.slice(-4) : "****";
+      await logSecurityEvent(c.env.DB, {
+        eventType: "BANK_ACCOUNT_COLLISION",
+        mobile: inv.mobile_number,
+        relatedMobile: taken.mobile_number,
+        details: { account_hint: hint, source: "public_bank_invite" },
+      });
       return c.json({ error: "This bank account is already registered to another mobile number." }, 409);
     }
 

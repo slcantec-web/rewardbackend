@@ -1,25 +1,31 @@
-FIX: Bank details request — proper modal (no browser prompt/alert)
-=================================================================
+FEATURE: End-customer security dossier + blocked-attempt logging
+================================================================
 
-WHY
-- "Request bank details" used browser prompt() for the invite link and
-  a second prompt() as clipboard fallback. That felt like a system alert,
-  not part of the app.
+WHAT YOU GET
+1) security_events table (auto-created) logs:
+   - DAILY_CLAIM_LIMIT     — mobile hit max claims per day (default 3)
+   - DEVICE_MULTI_MOBILE   — same phone used with different contact numbers
+   - BANK_ACCOUNT_COLLISION — same bank account tried on another mobile
+   - DESKTOP_BLOCKED       — PC / desktop claim attempt
 
-NOW
-- Finance portal (admin/finance.html) and Admin panel (admin/index.html)
-  open an in-app modal:
-  - Shows mobile + secure invite link
-  - Copy link button
-  - Open WhatsApp button (pre-filled message)
-  - Close
-- No browser alert/prompt for this flow.
-- Also fixed broken authHeaders() in finance.html (toast code had been
-  inserted mid-function).
+2) Daily claim limit is now ENFORCED server-side (was only UI text).
+   Override with env DAILY_CLAIM_LIMIT if needed.
 
-UPLOAD (Admin/Finance Pages project)
-  admin/finance.html  →  admin/finance.html
-  admin/index.html    →  admin/index.html
+3) Customer profile API includes:
+   - security.summary (counts)
+   - security.events (recent attempts)
+   - security.bank_collisions
+   - security.claims_today / daily_limit
+   - fraudHistory (claims with flags / elevated risk)
 
-Redeploy the Admin/Finance static pages (not only the Worker).
-Hard refresh after deploy (Ctrl+Shift+R).
+4) Admin Customer Dossier drawer shows a "Security & Risk Report" section.
+
+UPLOAD
+  Worker / API project:
+    src/fraud.ts
+    src/index.ts
+    src/extras.ts
+  Admin static pages:
+    admin/index.html
+
+Redeploy Worker + Admin pages. Hard refresh admin after deploy.

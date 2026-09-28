@@ -291,3 +291,175 @@ export async function evaluateFraud(input: FraudCheckInput): Promise<FraudEvalua
     flags,
   };
 }
+
+// ============================================================
+// Security events log — blocked / suspicious attempts for dossier
+// ============================================================
+
+export type SecurityEventType =
+  | "DAILY_CLAIM_LIMIT"
+  | "DEVICE_MULTI_MOBILE"
+  | "BANK_ACCOUNT_COLLISION"
+  | "HIGH_VELOCITY_DEVICE"
+  | "HIGH_VELOCITY_IP"
+  | "DESKTOP_BLOCKED"
+  | "DUPLICATE_BILL";
+
+let _securityTableReady = false;
+
+export async function ensureSecurityEventsTable(db: D1Database): Promise<void> {
+  if (_securityTableReady) return;
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS security_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        mobile_number TEXT,
+        related_mobile TEXT,
+        client_ip TEXT,
+        device_hash TEXT,
+        details_json TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`
+    )
+    .run();
+  try {
+    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_security_events_mobile ON security_events(mobile_number)`).run();
+    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_security_events_type ON security_events(event_type)`).run();
+    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_security_events_created ON security_events(created_at)`).run();
+  } catch {
+    /* index may already exist */
+  }
+  _securityTableReady = true;
+}
+
+export async function logSecurityEvent(
+  db: D1Database,
+  opts: {
+    eventType: SecurityEventType | string;
+    mobile?: string | null;
+    relatedMobile?: string | null;
+    clientIp?: string | null;
+    deviceHash?: string | null;
+    details?: Record<string, unknown> | null;
+  }
+): Promise<void> {
+  try {
+    await ensureSecurityEventsTable(db);
+    await db
+      .prepare(
+        `INSERT INTO security_events (event_type, mobile_number, related_mobile, client_ip, device_hash, details_json)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        opts.eventType,
+        opts.mobile ? normalizeMobile(opts.mobile) || opts.mobile : null,
+        opts.relatedMobile ? normalizeMobile(opts.relatedMobile) || opts.relatedMobile : null,
+        opts.clientIp || null,
+        opts.deviceHash || null,
+        opts.details ? JSON.stringify(opts.details) : null
+      )
+      .run();
+  } catch (err) {
+    console.error("logSecurityEvent failed (non-fatal):", err);
+  }
+}
+
+/** Default daily claim cap per mobile (matches public UI copy). Overridable via env DAILY_CLAIM_LIMIT. */
+export function dailyClaimLimit(env: { DAILY_CLAIM_LIMIT?: string }): number {
+  const n = parseInt(env.DAILY_CLAIM_LIMIT || "3", 10);
+  return Number.isFinite(n) && n > 0 ? n : 3;
+}
+
+export async function countClaimsToday(db: D1Database, mobile: string): Promise<number> {
+  const m = normalizeMobile(mobile) || mobile;
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS cnt FROM submissions
+       WHERE mobile_number = ?
+         AND date(created_at_server) = date('now')`
+    )
+    .bind(m)
+    .first<{ cnt: number }>();
+  return row?.cnt ?? 0;
+}
+
+export async function securityReportForMobile(db: D1Database, mobile: string): Promise<{
+  events: any[];
+  summary: {
+    daily_limit_hits: number;
+    bank_collision_attempts: number;
+    device_multi_mobile_blocks: number;
+    high_velocity_flags: number;
+    other_blocks: number;
+    total_events: number;
+  };
+  bank_collisions: { attempted_by: string; account_hint?: string; at: string }[];
+  claims_today: number;
+  daily_limit: number;
+}> {
+  await ensureSecurityEventsTable(db);
+  const m = normalizeMobile(mobile) || mobile;
+
+  const { results: events } = await db
+    .prepare(
+      `SELECT id, event_type, mobile_number, related_mobile, client_ip, device_hash, details_json, created_at
+       FROM security_events
+       WHERE mobile_number = ? OR related_mobile = ?
+       ORDER BY created_at DESC
+       LIMIT 50`
+    )
+    .bind(m, m)
+    .all<any>();
+
+  const list = events || [];
+  const summary = {
+    daily_limit_hits: 0,
+    bank_collision_attempts: 0,
+    device_multi_mobile_blocks: 0,
+    high_velocity_flags: 0,
+    other_blocks: 0,
+    total_events: list.length,
+  };
+  const bank_collisions: { attempted_by: string; account_hint?: string; at: string }[] = [];
+
+  for (const e of list) {
+    if (e.event_type === "DAILY_CLAIM_LIMIT") summary.daily_limit_hits++;
+    else if (e.event_type === "BANK_ACCOUNT_COLLISION") {
+      summary.bank_collision_attempts++;
+      let hint: string | undefined;
+      try {
+        const d = e.details_json ? JSON.parse(e.details_json) : {};
+        hint = d.account_hint || d.accountNumberMasked || undefined;
+      } catch {
+        /* ignore */
+      }
+      bank_collisions.push({
+        attempted_by: e.mobile_number || "—",
+        account_hint: hint,
+        at: e.created_at,
+      });
+    } else if (e.event_type === "DEVICE_MULTI_MOBILE") summary.device_multi_mobile_blocks++;
+    else if (e.event_type === "HIGH_VELOCITY_DEVICE" || e.event_type === "HIGH_VELOCITY_IP") summary.high_velocity_flags++;
+    else summary.other_blocks++;
+  }
+
+  const claims_today = await countClaimsToday(db, m);
+
+  return {
+    events: list.map((e) => ({
+      ...e,
+      details: (() => {
+        try {
+          return e.details_json ? JSON.parse(e.details_json) : null;
+        } catch {
+          return null;
+        }
+      })(),
+    })),
+    summary,
+    bank_collisions,
+    claims_today,
+    daily_limit: 3,
+  };
+}

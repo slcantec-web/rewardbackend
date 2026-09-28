@@ -2951,6 +2951,34 @@ async function openCustomerDetail(mobileOrId) {
     const wallet = c.wallet || {};
     const bank = c.bank || {};
     const recent = c.recent || [];
+    const security = c.security || null;
+    const fraudHistory = c.fraudHistory || [];
+    const secSum = (security && security.summary) || {};
+    const secEvents = (security && security.events) || [];
+    const eventLabel = (type) => ({
+      DAILY_CLAIM_LIMIT: "Daily claim limit exceeded",
+      DEVICE_MULTI_MOBILE: "Same device, different phone number",
+      BANK_ACCOUNT_COLLISION: "Same bank account on another mobile",
+      HIGH_VELOCITY_DEVICE: "High-velocity device",
+      HIGH_VELOCITY_IP: "High-velocity IP",
+      DESKTOP_BLOCKED: "Desktop / PC blocked",
+      DUPLICATE_BILL: "Duplicate bill image",
+    }[type] || type);
+    const secEventRows = secEvents.slice(0, 15).map(e => `
+      <tr>
+        <td style="font-size:0.78rem;font-weight:600;">${eventLabel(e.event_type)}</td>
+        <td class="mono" style="font-size:0.72rem;">${e.related_mobile || "—"}</td>
+        <td style="font-size:0.72rem;color:var(--text-muted);">${e.created_at ? new Date(e.created_at).toLocaleString() : "—"}</td>
+      </tr>
+    `).join("");
+    const fraudRows = fraudHistory.slice(0, 10).map(f => `
+      <tr>
+        <td class="mono"><b>${f.id}</b></td>
+        <td style="font-size:0.75rem;color:var(--danger);">${f.fraud_flags || "—"}</td>
+        <td class="mono">${f.risk_score ?? 0}</td>
+        <td style="font-size:0.72rem;color:var(--text-muted);">${f.created_at_server ? new Date(f.created_at_server).toLocaleDateString() : "—"}</td>
+      </tr>
+    `).join("");
 
     const claimRows = (recent || []).map(r => `
       <tr>
@@ -3055,6 +3083,53 @@ async function openCustomerDetail(mobileOrId) {
         ` : `
           <div style="font-size:0.82rem;color:var(--text-muted);padding:4px 0;">No commercial bank details registered yet. Customer can submit them on the tracking portal.</div>
         `}
+      </div>
+
+      <!-- Security / Risk Dossier -->
+      <div class="detail-section">
+        <div class="detail-section-title">🛡️ Security &amp; Risk Report</div>
+        <div class="detail-row">
+          <span class="detail-label">Claims today</span>
+          <span class="detail-val mono">${security ? `${security.claims_today ?? 0} / ${security.daily_limit ?? 3}` : "—"}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Daily limit hits</span>
+          <span class="detail-val">${secSum.daily_limit_hits ? `<span style="color:var(--danger);font-weight:700;">${secSum.daily_limit_hits}</span>` : "0"}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Bank account collisions</span>
+          <span class="detail-val">${secSum.bank_collision_attempts ? `<span style="color:var(--danger);font-weight:700;">${secSum.bank_collision_attempts}</span> (same account tried on different phones)` : "0"}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Device multi-mobile blocks</span>
+          <span class="detail-val">${secSum.device_multi_mobile_blocks ? `<span style="color:var(--danger);font-weight:700;">${secSum.device_multi_mobile_blocks}</span>` : "0"}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Velocity / rate-limit flags</span>
+          <span class="detail-val">${secSum.high_velocity_flags || 0}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Total security events</span>
+          <span class="detail-val mono">${secSum.total_events || 0}</span>
+        </div>
+        ${secEventRows ? `
+          <div style="margin-top:12px;font-size:0.78rem;font-weight:700;color:var(--text-muted);">Recent blocked / flagged attempts</div>
+          <div class="table-responsive" style="margin-top:6px;">
+            <table>
+              <thead><tr><th>Event</th><th>Related mobile</th><th>When</th></tr></thead>
+              <tbody>${secEventRows}</tbody>
+            </table>
+          </div>
+        ` : `<div style="font-size:0.82rem;color:var(--text-muted);padding:8px 0;">No blocked attempts recorded for this profile yet.</div>`}
+        ${fraudRows ? `
+          <div style="margin-top:14px;font-size:0.78rem;font-weight:700;color:var(--text-muted);">Claims with fraud flags / elevated risk</div>
+          <div class="table-responsive" style="margin-top:6px;">
+            <table>
+              <thead><tr><th>Submission</th><th>Flags</th><th>Risk</th><th>Date</th></tr></thead>
+              <tbody>${fraudRows}</tbody>
+            </table>
+          </div>
+        ` : ""}
       </div>
 
       <!-- Recent Submissions -->
