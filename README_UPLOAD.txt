@@ -1,24 +1,21 @@
-FEATURE: End-customer name on claim portal (first time only)
-===========================================================
+FIX: End-customer name in Customer Intelligence & Summaries Ledger
+=================================================================
 
-BEHAVIOUR
-- User enters contact mobile number.
-- Portal calls GET /api/public/mobile-check?mobile=...
-- If mobile already has a saved name → name field stays HIDDEN.
-- If new mobile (or name never collected) → "Your Full Name" appears
-  and is required before submit.
-- Name is stored in table end_customers (one per mobile).
-- Admin customer dossier shows "End Customer Name".
+ROOT CAUSE
+- Summaries API hard-coded end-customer label as "Customer {mobile}"
+  and never joined end_customers.full_name.
+
+NOW
+- API loads end_customers and sets:
+    end_customer_name  (real name or null)
+    dealer_name        (real name, or fallback "Customer {mobile}")
+- Admin + Finance summaries tables show the real name
+- Search matches end_customer_name
+- CSV export uses end_customer_name when present
+- "Name not collected" shown when missing
 
 UPLOAD
-  Claim Portal Pages:
-    public/index.html
-    public/app.js
-  Worker / API:
-    src/index.ts
-    src/types.ts
-    src/extras.ts
-  Admin Pages (dossier label only):
-    admin/index.html
+  Worker:  src/extras.ts
+  Admin:   admin/index.html, admin/finance.html
 
-Redeploy Claim Portal + Worker (+ Admin if desired). Hard refresh.
+Redeploy Worker + Admin pages. Hard refresh. Open Customer Summaries.

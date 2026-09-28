@@ -1081,6 +1081,25 @@ export function registerExtras(app: App) {
       bankMap.set(b.mobile_number, b);
     }
 
+    // End-customer names (collected on first claim)
+    const nameMap = new Map<string, string>();
+    try {
+      await c.env.DB.prepare(
+        `CREATE TABLE IF NOT EXISTS end_customers (
+          mobile_number TEXT PRIMARY KEY,
+          full_name TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )`
+      ).run();
+      const { results: nameList } = (await c.env.DB.prepare(
+        `SELECT mobile_number, full_name FROM end_customers`
+      ).all()) as any;
+      for (const n of nameList || []) {
+        if (n.mobile_number && n.full_name) nameMap.set(n.mobile_number, String(n.full_name).trim());
+      }
+    } catch { /* table may not exist yet on first boot */ }
+
     const { results: payoutList } = (await c.env.DB.prepare(
       `SELECT mobile_number, status, COUNT(*) as count, COALESCE(SUM(amount_lkr), 0) as total FROM payouts GROUP BY mobile_number, status`
     ).all()) as any;
@@ -1149,7 +1168,8 @@ export function registerExtras(app: App) {
       const walletBal = wallet ? Number(wallet.balance_lkr || 0) : 0;
       const paidTotal = paid ? Number(paid.total || 0) : 0;
       const net = Math.max(0, approved - paidTotal);
-      const name = `Customer ${mobile}`;
+      const endName = nameMap.get(mobile) || null;
+      const name = endName || `Customer ${mobile}`;
       if (!matchesQuery(mobile, name, "", "")) continue;
 
       customers.push({
@@ -1159,6 +1179,7 @@ export function registerExtras(app: App) {
         mobile_number: mobile,
         lookup_key: mobile,
         dealer_name: name,
+        end_customer_name: endName,
         customer_code: "—",
         city: "—",
         address: "—",

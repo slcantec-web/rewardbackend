@@ -1383,7 +1383,9 @@ function renderFinanceSummaries() {
               ? `<span class="status-chip chip-muted">Dealer</span>`
               : `<span class="status-chip chip-success">End customer</span>`}
           </div>
-          <b style="color:var(--primary);">${c.dealer_name || (isDealer ? "Dealer" : "Customer")}</b>
+          <b style="color:var(--primary);">${c.end_customer_name || c.dealer_name || (isDealer ? "Dealer" : "Customer")}</b>
+          ${!isDealer && c.end_customer_name ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">${c.mobile_number || ""}</div>` : ""}
+          ${!isDealer && !c.end_customer_name ? `<div style="font-size:0.72rem;color:var(--warning);margin-top:2px;">Name not collected</div>` : ""}
           ${c.customer_code && c.customer_code !== "—" ? `<div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${c.customer_code}</div>` : ""}
         </td>
         <td class="mono"><b>${c.mobile_number || "—"}</b></td>

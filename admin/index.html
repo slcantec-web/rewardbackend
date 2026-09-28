@@ -1929,7 +1929,9 @@ function renderSummariesView(data) {
               ? `<span class="chip chip-indigo"><span class="chip-dot"></span>Dealer</span>`
               : `<span class="chip chip-success"><span class="chip-dot"></span>End customer</span>`}
           </div>
-          <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">${c.dealer_name || c.mobile_number || '—'}</b>
+          <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">${c.end_customer_name || c.dealer_name || c.mobile_number || '—'}</b>
+          ${!c.is_dealer && c.end_customer_name ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">${c.mobile_number || ''}</div>` : ''}
+          ${!c.is_dealer && !c.end_customer_name ? `<div style="font-size:0.72rem;color:var(--warning);margin-top:2px;">Name not collected</div>` : ''}
           ${c.customer_code && c.customer_code !== '—' ? `<div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${c.customer_code}</div>` : ''}
         </td>
         <td class="mono">
@@ -2068,6 +2070,7 @@ function filterSummariesLive() {
     if (summariesFilter === "PENDING_PAYOUT" && (c.is_dealer || !(c.pending_payout_count > 0))) return false;
     if (!q) return true;
     return (c.dealer_name || "").toLowerCase().includes(q) ||
+           (c.end_customer_name || "").toLowerCase().includes(q) ||
            (c.customer_code || "").toLowerCase().includes(q) ||
            (c.mobile_number || "").toLowerCase().includes(q) ||
            (c.city || "").toLowerCase().includes(q);
@@ -2086,7 +2089,9 @@ function filterSummariesLive() {
             ? `<span class="chip chip-indigo"><span class="chip-dot"></span>Dealer</span>`
             : `<span class="chip chip-success"><span class="chip-dot"></span>End customer</span>`}
         </div>
-        <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">${c.dealer_name || c.mobile_number || '—'}</b>
+        <b style="color:var(--primary);cursor:pointer;" onclick="openCustomerDetail('${c.lookup_key || c.mobile_number}')">${c.end_customer_name || c.dealer_name || c.mobile_number || '—'}</b>
+        ${!c.is_dealer && c.end_customer_name ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">${c.mobile_number || ''}</div>` : ''}
+        ${!c.is_dealer && !c.end_customer_name ? `<div style="font-size:0.72rem;color:var(--warning);margin-top:2px;">Name not collected</div>` : ''}
         ${c.customer_code && c.customer_code !== '—' ? `<div class="mono" style="font-size:0.75rem;color:var(--text-muted);">${c.customer_code}</div>` : ''}
       </td>
       <td class="mono">
@@ -2134,7 +2139,7 @@ function exportSummariesCsv() {
   if (!cachedSummariesData.length) return showToast("No customer records to export.", "warning");
   const headers = ["Customer Name", "Customer Code", "Mobile / Phone", "City", "Submissions", "Approved LKR", "Wallet Balance LKR", "Bank Account", "Bank Name", "Payout Eligible"];
   const rows = cachedSummariesData.map(c => [
-    `"${c.dealer_name || ''}"`,
+    `"${c.end_customer_name || c.dealer_name || ''}"`,
     `"${c.customer_code || ''}"`,
     `"${c.mobile_number || ''}"`,
     `"${c.city || ''}"`,
