@@ -235,10 +235,24 @@
   <div style="font-size:0.75rem;color:var(--muted);margin-top:4px;">Must be <b>exactly 10 digits</b> (e.g. 0771234567). Max <b>3 claims per day</b> per number.</div>
   <div id="mobileHint" style="font-size:0.8rem;margin-top:6px;display:none;"></div>
 
-  <div id="customerNameWrap" style="display:none;margin-top:14px;">
-    <label for="customerNameInput">Your Full Name</label>
-    <input type="text" id="customerNameInput" autocomplete="name" maxlength="80" placeholder="Name as on your bank passbook / ID" />
-    <div style="font-size:0.75rem;color:var(--muted);margin-top:4px;">Required only the <b>first time</b> you claim with this mobile number.</div>
+  <div id="customerProfileWrap" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border, #e2e8f0);">
+    <div style="font-size:0.82rem;font-weight:700;margin-bottom:10px;color:var(--text);">Your details (first time only)</div>
+    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Enter once for this mobile. Next claims skip this section. Used for payout — no separate login needed.</div>
+
+    <label for="customerNameInput">Full name</label>
+    <input type="text" id="customerNameInput" autocomplete="name" maxlength="80" placeholder="Name as on bank passbook / ID" />
+
+    <label for="bankAccountName" style="margin-top:12px;display:block;">Account holder name</label>
+    <input type="text" id="bankAccountName" autocomplete="name" maxlength="80" placeholder="Same as passbook (often same as full name)" />
+
+    <label for="bankAccountNumber" style="margin-top:12px;display:block;">Bank account number</label>
+    <input type="text" id="bankAccountNumber" class="mono" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="Account number" />
+
+    <label for="bankNameInput" style="margin-top:12px;display:block;">Bank name</label>
+    <input type="text" id="bankNameInput" maxlength="80" placeholder="e.g. Commercial Bank / Sampath Bank" />
+
+    <label for="bankBranchInput" style="margin-top:12px;display:block;">Branch <span style="font-weight:500;color:var(--muted);">(optional)</span></label>
+    <input type="text" id="bankBranchInput" maxlength="80" placeholder="Branch name" />
   </div>
 </div>
 
@@ -246,7 +260,7 @@
 
 <p style="text-align:center;margin-top:18px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
   <a class="track-link" href="index.html">Submit a claim</a>
-  <a class="track-link" href="track.html">Track claims &amp; bank status →</a>
+  <a class="track-link" href="track.html">Track claims &amp; wallet →</a>
 </p>
 
 

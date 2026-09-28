@@ -1,21 +1,23 @@
-FIX: End-customer name in Customer Intelligence & Summaries Ledger
-=================================================================
+FEATURE: Name + bank on first claim only (no separate bank login)
+================================================================
 
-ROOT CAUSE
-- Summaries API hard-coded end-customer label as "Customer {mobile}"
-  and never joined end_customers.full_name.
+FLOW
+1) Customer enters contact mobile on claim form.
+2) If mobile has NO name or NO bank yet → show once:
+     - Full name
+     - Account holder name
+     - Account number
+     - Bank name
+     - Branch (optional)
+3) If profile already on file → fields hidden; claim only.
+4) Track page is for status + wallet (tracking ID). Bank form remains only as fallback.
 
-NOW
-- API loads end_customers and sets:
-    end_customer_name  (real name or null)
-    dealer_name        (real name, or fallback "Customer {mobile}")
-- Admin + Finance summaries tables show the real name
-- Search matches end_customer_name
-- CSV export uses end_customer_name when present
-- "Name not collected" shown when missing
+API
+- GET /api/public/mobile-check → hasName, hasBank, needProfile, name, bankHint
+- POST /api/submissions accepts customerName + bankDetails when required
 
 UPLOAD
-  Worker:  src/extras.ts
-  Admin:   admin/index.html, admin/finance.html
+  Claim Portal: public/index.html, public/app.js, public/track.html
+  Worker:       src/index.ts, src/types.ts
 
-Redeploy Worker + Admin pages. Hard refresh. Open Customer Summaries.
+Redeploy Claim Portal + Worker. Hard refresh claim page.

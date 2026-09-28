@@ -157,20 +157,41 @@ app.get("/api/public/mobile-check", async (c) => {
   if (!mobile || mobile.length < 9) {
     return c.json({ known: false, error: "Enter a valid mobile number" }, 400);
   }
-  // Known if prior submission, wallet, bank, or saved end-customer name
   const name = await getEndCustomerName(c.env.DB, mobile);
+  const bank = await c.env.DB.prepare(
+    `SELECT account_name, bank_name, account_number FROM customer_bank_details WHERE mobile_number = ? LIMIT 1`
+  )
+    .bind(mobile)
+    .first<{ account_name: string; bank_name: string; account_number: string }>();
   const prior =
     (await c.env.DB.prepare(`SELECT 1 AS x FROM submissions WHERE mobile_number = ? LIMIT 1`).bind(mobile).first()) ||
     (await c.env.DB.prepare(`SELECT 1 AS x FROM wallets WHERE mobile_number = ? LIMIT 1`).bind(mobile).first()) ||
-    (await c.env.DB.prepare(`SELECT 1 AS x FROM customer_bank_details WHERE mobile_number = ? LIMIT 1`).bind(mobile).first());
-  if (name) {
-    return c.json({ known: true, hasName: true, name });
-  }
-  if (prior) {
-    // Returning mobile but name never collected — still ask once
-    return c.json({ known: true, hasName: false, name: null });
-  }
-  return c.json({ known: false, hasName: false, name: null });
+    !!bank;
+
+  const hasName = !!name;
+  const hasBank = !!bank;
+  const bankHint = bank
+    ? {
+        account_name: bank.account_name,
+        bank_name: bank.bank_name,
+        account_number:
+          bank.account_number && bank.account_number.length > 4
+            ? "****" + bank.account_number.slice(-4)
+            : "****",
+      }
+    : null;
+
+  // needProfile = first time OR missing name/bank still to collect once
+  const needProfile = !hasName || !hasBank;
+
+  return c.json({
+    known: !!(prior || hasName || hasBank),
+    hasName,
+    hasBank,
+    needProfile,
+    name: name || null,
+    bankHint,
+  });
 });
 
 // ============================================================
@@ -220,21 +241,73 @@ app.post("/api/submissions", async (c) => {
     );
   }
 
-  // End-customer name: required only the first time this mobile appears (or if never collected)
+  // Profile (name + bank): required only until this mobile has both on file
   const existingName = await getEndCustomerName(env.DB, mobileNumber);
+  const existingBank = await env.DB.prepare(
+    `SELECT account_number FROM customer_bank_details WHERE mobile_number = ? LIMIT 1`
+  )
+    .bind(mobileNumber)
+    .first<{ account_number: string }>();
+
   let customerName = String((payload as any).customerName || "").trim().replace(/\s+/g, " ");
   if (existingName) {
     customerName = existingName; // ignore client re-entry
   } else if (!customerName || customerName.length < 2) {
     return c.json(
       {
-        error: "Please enter your full name (required for first-time claims on this mobile number).",
+        error: "Please enter your full name (required the first time you claim with this mobile).",
         code: "CUSTOMER_NAME_REQUIRED",
       },
       400
     );
   } else if (customerName.length > 80) {
     return c.json({ error: "Name is too long (max 80 characters).", code: "CUSTOMER_NAME_INVALID" }, 400);
+  }
+
+  const bankIn = (payload as any).bankDetails || null;
+  let bankToSave: { accountName: string; accountNumber: string; bankName: string; branchName: string | null } | null = null;
+  if (!existingBank) {
+    const accountName = String(bankIn?.accountName || customerName || "").trim();
+    const accountNumber = String(bankIn?.accountNumber || "").trim().replace(/\s+/g, "");
+    const bankName = String(bankIn?.bankName || "").trim();
+    const branchName = String(bankIn?.branchName || "").trim() || null;
+    if (!accountName || !accountNumber || !bankName) {
+      return c.json(
+        {
+          error: "Bank account name, account number, and bank name are required the first time you claim with this mobile.",
+          code: "BANK_DETAILS_REQUIRED",
+        },
+        400
+      );
+    }
+    if (accountNumber.length < 5 || accountNumber.length > 20) {
+      return c.json({ error: "Enter a valid bank account number.", code: "BANK_DETAILS_INVALID" }, 400);
+    }
+    // One bank account → one mobile
+    const taken = await env.DB.prepare(
+      `SELECT mobile_number FROM customer_bank_details WHERE account_number = ? AND mobile_number != ? LIMIT 1`
+    )
+      .bind(accountNumber, mobileNumber)
+      .first<{ mobile_number: string }>();
+    if (taken) {
+      await logSecurityEvent(env.DB, {
+        eventType: "BANK_ACCOUNT_COLLISION",
+        mobile: mobileNumber,
+        relatedMobile: taken.mobile_number,
+        details: {
+          account_hint: accountNumber.length > 4 ? "****" + accountNumber.slice(-4) : "****",
+          source: "claim_submit",
+        },
+      });
+      return c.json(
+        {
+          error: "This bank account is already registered to another mobile number. One bank account can only be linked to one mobile.",
+          code: "BANK_ACCOUNT_COLLISION",
+        },
+        409
+      );
+    }
+    bankToSave = { accountName, accountNumber, bankName, branchName };
   }
 
   // Daily claim limit per mobile (default 3 — matches public UI)
@@ -425,6 +498,24 @@ app.post("/api/submissions", async (c) => {
       .run();
   }
 
+  // Persist bank on first collection (same as name — no separate track/login step)
+  if (bankToSave && !existingBank) {
+    await env.DB.prepare(`INSERT OR IGNORE INTO wallets (mobile_number) VALUES (?)`).bind(mobileNumber).run();
+    await env.DB.prepare(
+      `INSERT INTO customer_bank_details (mobile_number, account_name, account_number, bank_name, branch_name)
+       VALUES (?,?,?,?,?)
+       ON CONFLICT(mobile_number) DO NOTHING`
+    )
+      .bind(
+        mobileNumber,
+        bankToSave.accountName,
+        bankToSave.accountNumber,
+        bankToSave.bankName,
+        bankToSave.branchName
+      )
+      .run();
+  }
+
   if (fraud.duplicateImage) {
     await env.DB.prepare(
       `UPDATE submissions SET rejection_code = 'DUPLICATE_BILL_IMAGE' WHERE id = ?`
@@ -437,6 +528,8 @@ app.post("/api/submissions", async (c) => {
     submissionId,
     status: fraud.duplicateImage ? "REJECTED" : "PENDING",
     flags: fraud.flags,
+    profileSaved: !!(customerName && !existingName) || !!(bankToSave && !existingBank),
+    hasBank: !!(existingBank || bankToSave),
   });
 });
 

@@ -122,7 +122,7 @@
 
 <div class="card">
   <h1>Track Your Claim</h1>
-  <p class="muted" style="margin-bottom:14px;">Enter your contact mobile and any submission ID for that mobile to view claim status, wallet balance, and a summary of all claims under the same number.</p>
+  <p class="muted" style="margin-bottom:14px;">Enter your contact mobile and submission tracking ID to view claim status and wallet balance. Payout profile (name & bank) is collected on your first claim — no separate login needed.</p>
   
   <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;text-transform:uppercase;">Registered Mobile</label>
   <input type="tel" id="mobileInput" inputmode="numeric" pattern="[0-9\s+]*" autocomplete="tel" placeholder="e.g. 0771234567" />
@@ -255,10 +255,10 @@ async function loadBankDetails() {
       <h3 style="font-size:1rem;font-weight:700;margin-bottom:8px;">Direct Bank Account Payout</h3>
       <p class="muted" style="margin-bottom:10px;">Your contact mobile is permanently linked to <b>one</b> bank account. This is required before Finance can pay you.</p>
       ${has
-        ? `<div class="banner-ok">✅ Your bank details are safely registered. Approved payouts will be transferred automatically.</div>
+        ? `<div class="banner-ok">✅ Your bank details are on file. Approved payouts will be transferred automatically.</div>
            <div class="muted">Registered details:</div>
            <div style="font-size:0.88rem;font-weight:600;margin-bottom:12px;">${d.account_name} — ${d.bank_name}${d.branch_name ? " (" + d.branch_name + ")" : ""} · <span class="mono">${d.account_number}</span></div>`
-        : `<div class="banner-warn">⚠️ Add your bank details below so Finance can disburse your reward payment via direct transfer.</div>`}
+        : `<div class="banner-warn">⚠️ Bank not on file yet. You can add it here, or submit a new claim — the first claim form also collects name & bank once.</div>`}
       
       <div class="bank-form">
         <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Account Holder Name</label>

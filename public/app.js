@@ -12,8 +12,8 @@ let selectedDealerId = null;
 let gpsData = null;
 let billFile = null;
 let billBase64 = null;
-/** null = not checked yet; true = name required; false = known mobile, skip name */
-let customerNameRequired = null;
+/** null = not checked yet; true = name+bank required; false = already on file */
+let profileRequired = null;
 let mobileCheckTimer = null;
 const quantities = {}; // productId -> qty
 const createdAtClient = new Date().toISOString();
@@ -161,8 +161,22 @@ async function init() {
     scheduleMobileCheck();
     validateForm();
   });
-  document.getElementById("mobileInput")?.addEventListener("blur", checkMobileForName);
-  document.getElementById("customerNameInput")?.addEventListener("input", validateForm);
+  document.getElementById("mobileInput")?.addEventListener("blur", checkMobileProfile);
+  ["customerNameInput", "bankAccountName", "bankAccountNumber", "bankNameInput", "bankBranchInput"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", () => {
+      // Keep account holder in sync with full name when empty
+      if (id === "customerNameInput") {
+        const n = document.getElementById("customerNameInput");
+        const a = document.getElementById("bankAccountName");
+        if (n && a && (!a.dataset.touched || a.value === "")) a.value = n.value;
+      }
+      if (id === "bankAccountName") {
+        const a = document.getElementById("bankAccountName");
+        if (a) a.dataset.touched = "1";
+      }
+      validateForm();
+    });
+  });
   document.getElementById("submitBtn")?.addEventListener("click", submitClaim);
 
   try {
@@ -446,41 +460,52 @@ function normalizeMobileClient(raw) {
   return mobileRaw.replace(/\D/g, "");
 }
 
-function setCustomerNameVisibility(show, knownName) {
-  const wrap = document.getElementById("customerNameWrap");
+function setProfileVisibility(show, opts) {
+  opts = opts || {};
+  const wrap = document.getElementById("customerProfileWrap");
   const hint = document.getElementById("mobileHint");
-  const nameInput = document.getElementById("customerNameInput");
   if (!wrap) return;
   if (show) {
     wrap.style.display = "block";
-    customerNameRequired = true;
+    profileRequired = true;
     if (hint) {
       hint.style.display = "block";
       hint.style.color = "var(--muted)";
-      hint.textContent = "New mobile — please enter your full name below.";
+      const missing = [];
+      if (!opts.hasName) missing.push("name");
+      if (!opts.hasBank) missing.push("bank details");
+      hint.textContent = missing.length
+        ? "Please enter your " + missing.join(" & ") + " below (once only for this mobile)."
+        : "Please complete your payout profile below (once only).";
     }
   } else {
     wrap.style.display = "none";
-    customerNameRequired = false;
-    if (nameInput) nameInput.value = "";
+    profileRequired = false;
+    ["customerNameInput", "bankAccountName", "bankAccountNumber", "bankNameInput", "bankBranchInput"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
     if (hint) {
       hint.style.display = "block";
       hint.style.color = "var(--primary, #0f766e)";
-      hint.textContent = knownName
-        ? `Welcome back, ${knownName}. Name is already on file.`
-        : "This mobile is already registered — name not required.";
+      const bits = [];
+      if (opts.knownName) bits.push(opts.knownName);
+      if (opts.hasBank) bits.push("bank on file");
+      hint.textContent = bits.length
+        ? `Welcome back${opts.knownName ? ", " + opts.knownName : ""}. Profile on file — you can submit claims only.`
+        : "This mobile is already registered — profile not required again.";
     }
   }
   validateForm();
 }
 
-async function checkMobileForName() {
+async function checkMobileProfile() {
   const input = document.getElementById("mobileInput");
   const mobile = normalizeMobileClient(input?.value || "");
-  const wrap = document.getElementById("customerNameWrap");
+  const wrap = document.getElementById("customerProfileWrap");
   const hint = document.getElementById("mobileHint");
   if (mobile.length < 9) {
-    customerNameRequired = null;
+    profileRequired = null;
     if (wrap) wrap.style.display = "none";
     if (hint) hint.style.display = "none";
     validateForm();
@@ -490,26 +515,30 @@ async function checkMobileForName() {
     const res = await fetch(`${API_BASE}/api/public/mobile-check?mobile=${encodeURIComponent(mobile)}`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      // On error, show name field to be safe for first-time users
-      setCustomerNameVisibility(true);
+      setProfileVisibility(true, { hasName: false, hasBank: false });
       return;
     }
-    if (data.hasName && data.name) {
-      setCustomerNameVisibility(false, data.name);
-    } else if (data.known && data.hasName) {
-      setCustomerNameVisibility(false);
+    const need = data.needProfile === true || !data.hasName || !data.hasBank;
+    if (need) {
+      setProfileVisibility(true, { hasName: !!data.hasName, hasBank: !!data.hasBank });
+      // Prefill name if we have it but bank missing
+      if (data.hasName && data.name) {
+        const n = document.getElementById("customerNameInput");
+        const a = document.getElementById("bankAccountName");
+        if (n && !n.value) n.value = data.name;
+        if (a && !a.value) a.value = data.name;
+      }
     } else {
-      // New mobile, or known but name never collected
-      setCustomerNameVisibility(true);
+      setProfileVisibility(false, { knownName: data.name || null, hasBank: true });
     }
   } catch {
-    setCustomerNameVisibility(true);
+    setProfileVisibility(true, { hasName: false, hasBank: false });
   }
 }
 
 function scheduleMobileCheck() {
   clearTimeout(mobileCheckTimer);
-  mobileCheckTimer = setTimeout(checkMobileForName, 450);
+  mobileCheckTimer = setTimeout(checkMobileProfile, 450);
 }
 
 function validateForm() {
@@ -520,11 +549,16 @@ function validateForm() {
   const hasQty = Object.values(quantities).some((q) => q > 0);
   const mobile = normalizeMobileClient(document.getElementById("mobileInput")?.value || "");
   const hasMobile = mobile.length >= 9;
-  const nameEl = document.getElementById("customerNameInput");
-  const nameVal = (nameEl?.value || "").trim();
-  const nameOk = customerNameRequired !== true || nameVal.length >= 2;
+  let profileOk = true;
+  if (profileRequired === true) {
+    const nameVal = (document.getElementById("customerNameInput")?.value || "").trim();
+    const accName = (document.getElementById("bankAccountName")?.value || "").trim() || nameVal;
+    const accNum = (document.getElementById("bankAccountNumber")?.value || "").trim().replace(/\s+/g, "");
+    const bankName = (document.getElementById("bankNameInput")?.value || "").trim();
+    profileOk = nameVal.length >= 2 && accName.length >= 2 && accNum.length >= 5 && bankName.length >= 2;
+  }
   const hasGps = !!(gpsData && gpsData.lat != null && gpsData.lng != null);
-  const ready = !!(selectedDealerId && hasQty && billBase64 && hasGps && hasMobile && nameOk);
+  const ready = !!(selectedDealerId && hasQty && billBase64 && hasGps && hasMobile && profileOk);
   document.getElementById("submitBtn").disabled = !ready;
 }
 
@@ -552,17 +586,23 @@ async function submitClaim() {
   // Normalize mobile client-side (server also normalizes) so +94 / spacing cannot bypass device binding
   const mobileRaw = normalizeMobileClient(document.getElementById("mobileInput").value);
   const customerName = (document.getElementById("customerNameInput")?.value || "").trim();
+  const accountName = (document.getElementById("bankAccountName")?.value || "").trim() || customerName;
+  const accountNumber = (document.getElementById("bankAccountNumber")?.value || "").trim().replace(/\s+/g, "");
+  const bankName = (document.getElementById("bankNameInput")?.value || "").trim();
+  const branchName = (document.getElementById("bankBranchInput")?.value || "").trim();
 
-  if (customerNameRequired === true && customerName.length < 2) {
-    const banner = document.getElementById("resultBanner");
-    if (banner) {
-      banner.style.display = "block";
-      banner.className = "result-banner err";
-      banner.textContent = "Please enter your full name (required for first-time claims).";
+  if (profileRequired === true) {
+    if (customerName.length < 2 || accountName.length < 2 || accountNumber.length < 5 || bankName.length < 2) {
+      const banner = document.getElementById("resultBanner");
+      if (banner) {
+        banner.style.display = "block";
+        banner.className = "result-banner err";
+        banner.textContent = "Please complete your name and bank details (required the first time for this mobile).";
+      }
+      btn.disabled = false;
+      btn.textContent = "Submit Claim & Get Tracking ID";
+      return;
     }
-    btn.disabled = false;
-    btn.textContent = "Submit Claim & Get Tracking ID";
-    return;
   }
 
   const payload = {
@@ -574,8 +614,14 @@ async function submitClaim() {
     createdAtClient,
     device: captureDeviceBlueprint(), // always includes installId
   };
-  if (customerNameRequired === true && customerName) {
+  if (profileRequired === true) {
     payload.customerName = customerName;
+    payload.bankDetails = {
+      accountName,
+      accountNumber,
+      bankName,
+      branchName: branchName || undefined,
+    };
   }
 
   try {
@@ -592,8 +638,11 @@ async function submitClaim() {
       const sid = data.submissionId || "";
       banner.innerHTML =
         `✅ Claim submitted! Your tracking ID is <b>${sid}</b>.<br>` +
-        `Next: open <a href="track.html" style="color:inherit;font-weight:700;text-decoration:underline;">Track your claim</a> ` +
-        `with this mobile + tracking ID and <b>add your bank account</b> (one mobile = one bank account, required for payout).`;
+        (data.hasBank || data.profileSaved
+          ? `Your payout profile is saved for this mobile. Later claims only need the bill — no bank form again.<br>`
+          : ``) +
+        `To check status & wallet: <a href="track.html" style="color:inherit;font-weight:700;text-decoration:underline;">Track claims & wallet</a> ` +
+        `with this mobile + tracking ID.`;
     } else {
       banner.className = "result-banner err";
       if (data.code === "DEVICE_MULTI_MOBILE" || (data.flags || []).includes("FLAG_DEVICE_MULTI_MOBILE")) {
@@ -601,9 +650,11 @@ async function submitClaim() {
           `⚠️ <b>This phone is already linked to another contact number.</b><br>` +
           `You cannot submit claims for a different number from the same device.<br>` +
           `Use the original mobile number for this phone, or contact CanTec support if you need help.`;
-      } else if (data.code === "CUSTOMER_NAME_REQUIRED") {
-        setCustomerNameVisibility(true);
-        banner.innerHTML = `⚠️ Please enter your full name — required the first time you claim with this mobile.`;
+      } else if (data.code === "CUSTOMER_NAME_REQUIRED" || data.code === "BANK_DETAILS_REQUIRED") {
+        setProfileVisibility(true, { hasName: data.code !== "CUSTOMER_NAME_REQUIRED", hasBank: data.code !== "BANK_DETAILS_REQUIRED" });
+        banner.innerHTML = `⚠️ Please complete your name and bank details — required the first time for this mobile.`;
+      } else if (data.code === "BANK_ACCOUNT_COLLISION") {
+        banner.innerHTML = `⚠️ This bank account is already linked to another mobile number. Use a different account.`;
       } else {
         const msg = data.error || (data.flags || []).join(", ") || "see support";
         banner.innerHTML = `⚠️ Claim could not be accepted (${msg}).`;

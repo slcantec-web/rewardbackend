@@ -57,6 +57,13 @@ export interface CreateSubmissionPayload {
   mobileNumber: string;
   /** Required only on first claim for this mobile — stored as end-customer name */
   customerName?: string;
+  /** Required only when this mobile has no bank on file yet */
+  bankDetails?: {
+    accountName: string;
+    accountNumber: string;
+    bankName: string;
+    branchName?: string;
+  };
   items: SubmissionItemInput[];
   billImageBase64: string;      // client-compressed image, base64
   gps: { lat: number; lng: number; accuracy: number };
