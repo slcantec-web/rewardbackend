@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://customereward.slcantec.workers.dev" crossorigin />
+<link rel="dns-prefetch" href="https://customereward.slcantec.workers.dev" />
 <title>CanTec Rewards — Finance Review &amp; Settlement Console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -909,10 +911,28 @@ async function selectSubmission(id) {
   `;
 
   try {
-    const res = await fetch(`${API_BASE}/api/finance/submissions/${id}`, { headers: authHeaders() });
+    const detailPromise = fetch(`${API_BASE}/api/finance/submissions/${id}`, { headers: authHeaders() });
+    // Prefetch bill image bytes while detail JSON loads
+    const imgPromise = fetch(`${API_BASE}/api/finance/submissions/${id}/image`, { headers: authHeaders() })
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const blob = await r.blob();
+        return URL.createObjectURL(blob);
+      })
+      .catch(() => null);
+
+    const res = await detailPromise;
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Load failed");
     renderReview(data);
-    loadBillImage(id);
+    const imgUrl = await imgPromise;
+    const imgEl = document.getElementById("billImage");
+    if (imgEl && imgUrl) {
+      imgEl.src = imgUrl;
+      imgEl.style.display = "block";
+    } else {
+      loadBillImage(id);
+    }
   } catch (err) {
     document.getElementById("reviewPanel").innerHTML = `<div class="panel" style="color:red;">Error loading submission.</div>`;
   }

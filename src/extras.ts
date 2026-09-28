@@ -220,9 +220,18 @@ async function customerProfile(db: D1Database, mobileOrParam: string, fullBank: 
   const searchPhone = contactPhone || (param.startsWith("DLR-") ? "" : param);
   const effectiveKey = searchPhone || dealerId || param;
 
-  // Submissions associated with this dealer OR this mobile phone
-  const stats = await db
-    .prepare(
+  // Parallel profile queries (dossier load latency)
+  const [
+    stats,
+    wallet,
+    paid,
+    dealersRes,
+    deviceRes,
+    recentRes,
+    bank,
+    endNameRow,
+  ] = await Promise.all([
+    db.prepare(
       `SELECT COUNT(*) AS total,
               COALESCE(SUM(status = 'APPROVED'), 0) AS approved,
               COALESCE(SUM(status = 'REJECTED'), 0) AS rejected,
@@ -234,91 +243,48 @@ async function customerProfile(db: D1Database, mobileOrParam: string, fullBank: 
               MAX(created_at_server) AS last_claim
        FROM submissions
        WHERE (dealer_id = ? AND ? != '') OR (mobile_number = ? AND ? != '')`
-    )
-    .bind(dealerId, dealerId, searchPhone, searchPhone)
-    .first<any>();
-
-  // Wallet lookup by phone or dealer ID
-  const wallet = await db
-    .prepare(
+    ).bind(dealerId, dealerId, searchPhone, searchPhone).first<any>(),
+    db.prepare(
       `SELECT balance_lkr, status FROM wallets
        WHERE (mobile_number = ? AND ? != '') OR (mobile_number = ? AND ? != '')
        ORDER BY balance_lkr DESC LIMIT 1`
-    )
-    .bind(searchPhone, searchPhone, dealerId, dealerId)
-    .first<any>();
-
-  // Payouts paid
-  const paid = await db
-    .prepare(
+    ).bind(searchPhone, searchPhone, dealerId, dealerId).first<any>(),
+    db.prepare(
       `SELECT COUNT(*) AS n, COALESCE(SUM(amount_lkr), 0) AS total FROM payouts
        WHERE ((mobile_number = ? AND ? != '') OR (mobile_number = ? AND ? != '')) AND status = 'PAID'`
-    )
-    .bind(searchPhone, searchPhone, dealerId, dealerId)
-    .first<any>();
-
-  // Associated dealers for this claimant
-  const { results: dealers } = await db
-    .prepare(
+    ).bind(searchPhone, searchPhone, dealerId, dealerId).first<any>(),
+    db.prepare(
       `SELECT COALESCE(d.name, 'Direct Customer') AS name, d.city AS city, COUNT(*) AS claims
        FROM submissions s LEFT JOIN dealers d ON d.id = s.dealer_id
        WHERE s.mobile_number = ? AND ? != '' GROUP BY s.dealer_id ORDER BY claims DESC LIMIT 5`
-    )
-    .bind(searchPhone, searchPhone)
-    .all<any>();
-
-  // Device telemetry
-  const { results: deviceRows } = await db
-    .prepare(
+    ).bind(searchPhone, searchPhone).all<any>(),
+    db.prepare(
       `SELECT device_fingerprint_hash AS hash, COUNT(*) AS claims, MAX(device_raw_json) AS raw
        FROM submissions
        WHERE ((mobile_number = ? AND ? != '') OR (dealer_id = ? AND ? != '')) AND device_fingerprint_hash IS NOT NULL
        GROUP BY device_fingerprint_hash ORDER BY claims DESC LIMIT 10`
-    )
-    .bind(searchPhone, searchPhone, dealerId, dealerId)
-    .all<any>();
-  const devices = (deviceRows || []).map((d) => ({ hash: d.hash, claims: d.claims, ...describeDevice(safeJson(d.raw)) }));
-
-  // Recent claims
-  const { results: recent } = await db
-    .prepare(
+    ).bind(searchPhone, searchPhone, dealerId, dealerId).all<any>(),
+    db.prepare(
       `SELECT id, mobile_number, status, created_at_server, total_claimed_reward_lkr, total_approved_reward_lkr, risk_score
        FROM submissions
        WHERE (dealer_id = ? AND ? != '') OR (mobile_number = ? AND ? != '')
        ORDER BY created_at_server DESC LIMIT 15`
-    )
-    .bind(dealerId, dealerId, searchPhone, searchPhone)
-    .all<any>();
-
-  // Bank details
-  const bank = await db
-    .prepare(
+    ).bind(dealerId, dealerId, searchPhone, searchPhone).all<any>(),
+    db.prepare(
       `SELECT account_name, account_number, bank_name, branch_name, updated_at FROM customer_bank_details
        WHERE (mobile_number = ? AND ? != '') OR (mobile_number = ? AND ? != '')
        LIMIT 1`
-    )
-    .bind(searchPhone, searchPhone, dealerId, dealerId)
-    .first<any>();
+    ).bind(searchPhone, searchPhone, dealerId, dealerId).first<any>(),
+    searchPhone
+      ? db.prepare(`SELECT full_name FROM end_customers WHERE mobile_number = ? LIMIT 1`).bind(searchPhone).first<{ full_name: string }>().catch(() => null)
+      : Promise.resolve(null),
+  ]);
 
-  // End-customer name (collected on first claim)
-  let endCustomerName: string | null = null;
-  try {
-    await db.prepare(
-      `CREATE TABLE IF NOT EXISTS end_customers (
-        mobile_number TEXT PRIMARY KEY,
-        full_name TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      )`
-    ).run();
-    if (searchPhone) {
-      const en = await db
-        .prepare(`SELECT full_name FROM end_customers WHERE mobile_number = ? LIMIT 1`)
-        .bind(searchPhone)
-        .first<{ full_name: string }>();
-      endCustomerName = en?.full_name?.trim() || null;
-    }
-  } catch { /* ignore */ }
+  const dealers = (dealersRes as any)?.results || [];
+  const deviceRows = (deviceRes as any)?.results || [];
+  const devices = (deviceRows || []).map((d: any) => ({ hash: d.hash, claims: d.claims, ...describeDevice(safeJson(d.raw)) }));
+  const recent = (recentRes as any)?.results || [];
+  const endCustomerName = endNameRow?.full_name?.trim() || null;
 
   // Security / risk dossier (rate limits, bank collisions, blocked attempts)
   let security: any = null;
@@ -1019,12 +985,8 @@ export function registerExtras(app: App) {
     const sort = (c.req.query("sort") || "approved").toLowerCase();
     const limit = Math.min(500, Math.max(20, parseInt(c.req.query("limit") || "200", 10) || 200));
 
-    // Pull dealers and submissions
-    const { results: dealers } = (await c.env.DB.prepare(
-      `SELECT id, customer_code, name, contact_phone, city, address, active FROM dealers`
-    ).all()) as any;
-
-    const { results: subRollup } = (await c.env.DB.prepare(`
+    // Pull independent datasets in parallel (big latency win on D1)
+    const subRollupSql = `
       SELECT s.mobile_number,
              COUNT(*) AS total_submissions,
              COALESCE(SUM(s.status = 'APPROVED'), 0) AS approved_count,
@@ -1046,63 +1008,74 @@ export function registerExtras(app: App) {
              MAX(s.created_at_server) AS last_seen
       FROM submissions s
       WHERE s.mobile_number IS NOT NULL AND s.mobile_number != ''
-      GROUP BY s.mobile_number
-    `).all()) as any;
+      GROUP BY s.mobile_number`;
 
-    const subMap = new Map<string, any>();
-    for (const r of subRollup || []) {
-      subMap.set(r.mobile_number, r);
-    }
-
-    // Roll up submissions submitted at dealers
-    const { results: dealerSubRollup } = (await c.env.DB.prepare(`
+    const [
+      dealersRes,
+      subRollupRes,
+      dealerSubRes,
+      walletsRes,
+      bankRes,
+      payoutRes,
+      nameRes,
+    ] = await Promise.all([
+      c.env.DB.prepare(`SELECT id, customer_code, name, contact_phone, city, address, active FROM dealers`).all(),
+      c.env.DB.prepare(subRollupSql).all(),
+      c.env.DB.prepare(`
       SELECT s.dealer_id,
              COUNT(*) AS dealer_submissions,
              COALESCE(SUM(s.status = 'APPROVED'), 0) AS dealer_approved_count,
              COALESCE(SUM(CASE WHEN s.status = 'APPROVED' THEN s.total_approved_reward_lkr ELSE 0 END), 0) AS dealer_approved_lkr
       FROM submissions s
       WHERE s.dealer_id IS NOT NULL AND s.dealer_id != ''
-      GROUP BY s.dealer_id
-    `).all()) as any;
-    const dealerSubMap = new Map<string, any>();
-    for (const ds of dealerSubRollup || []) {
-      dealerSubMap.set(ds.dealer_id, ds);
-    }
-
-    const { results: wallets } = (await c.env.DB.prepare(`SELECT mobile_number, balance_lkr, status FROM wallets`).all()) as any;
-    const walletMap = new Map<string, any>();
-    for (const w of wallets || []) {
-      walletMap.set(w.mobile_number, w);
-    }
-
-    const { results: bankList } = (await c.env.DB.prepare(`SELECT mobile_number, account_name, bank_name FROM customer_bank_details`).all()) as any;
-    const bankMap = new Map<string, any>();
-    for (const b of bankList || []) {
-      bankMap.set(b.mobile_number, b);
-    }
-
-    // End-customer names (collected on first claim)
-    const nameMap = new Map<string, string>();
-    try {
-      await c.env.DB.prepare(
+      GROUP BY s.dealer_id`).all(),
+      c.env.DB.prepare(`SELECT mobile_number, balance_lkr, status FROM wallets`).all(),
+      c.env.DB.prepare(`SELECT mobile_number, account_name, bank_name FROM customer_bank_details`).all(),
+      c.env.DB.prepare(
+        `SELECT mobile_number, status, COUNT(*) as count, COALESCE(SUM(amount_lkr), 0) as total FROM payouts GROUP BY mobile_number, status`
+      ).all(),
+      c.env.DB.prepare(
         `CREATE TABLE IF NOT EXISTS end_customers (
           mobile_number TEXT PRIMARY KEY,
           full_name TEXT NOT NULL,
           created_at TEXT NOT NULL DEFAULT (datetime('now')),
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )`
-      ).run();
-      const { results: nameList } = (await c.env.DB.prepare(
-        `SELECT mobile_number, full_name FROM end_customers`
-      ).all()) as any;
-      for (const n of nameList || []) {
-        if (n.mobile_number && n.full_name) nameMap.set(n.mobile_number, String(n.full_name).trim());
-      }
-    } catch { /* table may not exist yet on first boot */ }
+      ).run().then(() => c.env.DB.prepare(`SELECT mobile_number, full_name FROM end_customers`).all()).catch(() => ({ results: [] })),
+    ]);
 
-    const { results: payoutList } = (await c.env.DB.prepare(
-      `SELECT mobile_number, status, COUNT(*) as count, COALESCE(SUM(amount_lkr), 0) as total FROM payouts GROUP BY mobile_number, status`
-    ).all()) as any;
+    const dealers = (dealersRes as any).results || [];
+    const subRollup = (subRollupRes as any).results || [];
+    const dealerSubRollup = (dealerSubRes as any).results || [];
+    const wallets = (walletsRes as any).results || [];
+    const bankList = (bankRes as any).results || [];
+    const payoutList = (payoutRes as any).results || [];
+    const nameList = (nameRes as any).results || [];
+
+    const subMap = new Map<string, any>();
+    for (const r of subRollup || []) {
+      subMap.set(r.mobile_number, r);
+    }
+
+    const dealerSubMap = new Map<string, any>();
+    for (const ds of dealerSubRollup || []) {
+      dealerSubMap.set(ds.dealer_id, ds);
+    }
+
+    const walletMap = new Map<string, any>();
+    for (const w of wallets || []) {
+      walletMap.set(w.mobile_number, w);
+    }
+
+    const bankMap = new Map<string, any>();
+    for (const b of bankList || []) {
+      bankMap.set(b.mobile_number, b);
+    }
+
+    const nameMap = new Map<string, string>();
+    for (const n of nameList || []) {
+      if (n.mobile_number && n.full_name) nameMap.set(n.mobile_number, String(n.full_name).trim());
+    }
     const paidMap = new Map<string, { count: number; total: number }>();
     const pendingPayMap = new Map<string, { count: number; total: number }>();
     for (const p of payoutList || []) {

@@ -433,17 +433,20 @@ app.post("/api/submissions", async (c) => {
     }
   }
 
-  // --- Resolve current payout rates & compute claimed reward ---
+  // --- Resolve payout rates (one query for all active rates, not per item) ---
   let totalClaimed = 0;
   const itemRows: { productId: string; claimedQty: number; rate: number; lineReward: number }[] = [];
+  const { results: activeRates } = await env.DB.prepare(
+    `SELECT product_id, rate_lkr FROM payout_rates WHERE effective_to IS NULL`
+  ).all<{ product_id: string; rate_lkr: number }>();
+  const rateMap = new Map<string, number>();
+  for (const r of activeRates || []) {
+    // If multiple open rows per product, last wins; typically one active
+    rateMap.set(r.product_id, r.rate_lkr);
+  }
   for (const item of payload.items) {
     if (item.claimedQty <= 0) continue;
-    const rateRow = await env.DB.prepare(
-      `SELECT rate_lkr FROM payout_rates WHERE product_id = ? AND effective_to IS NULL ORDER BY effective_from DESC LIMIT 1`
-    )
-      .bind(item.productId)
-      .first<{ rate_lkr: number }>();
-    const rate = rateRow?.rate_lkr ?? 0;
+    const rate = rateMap.get(item.productId) ?? 0;
     const lineReward = rate * item.claimedQty;
     totalClaimed += lineReward;
     itemRows.push({ productId: item.productId, claimedQty: item.claimedQty, rate, lineReward });

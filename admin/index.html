@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://customereward.slcantec.workers.dev" crossorigin />
+<link rel="dns-prefetch" href="https://customereward.slcantec.workers.dev" />
 <title>CanTec Rewards — Admin Command Center</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1238,8 +1240,8 @@ function showApp() {
   document.getElementById("userRoleLabel").textContent = "Master Admin";
   document.getElementById("avatarLetter").textContent = currentUsername.charAt(0).toUpperCase();
 
-  loadOverview();
-  updateHeaderCounts();
+  // Parallel boot — overview + header badges
+  Promise.all([loadOverview(), updateHeaderCounts()]).catch(() => {});
 }
 
 if (!requireAdminSession()) {
@@ -1274,20 +1276,25 @@ document.querySelectorAll(".tab-btn").forEach(tab => {
 
 async function updateHeaderCounts() {
   try {
-    const custRes = await fetch(`${API_BASE}/api/admin/dealers`, { headers: authHeaders() });
+    // Parallel lightweight calls — do NOT load full customer-summaries on every boot
+    const [custRes, payRes] = await Promise.all([
+      fetch(`${API_BASE}/api/admin/dealers`, { headers: authHeaders() }),
+      fetch(`${API_BASE}/api/admin/payouts?status=PENDING`, { headers: authHeaders() }),
+    ]);
     if (custRes.ok) {
       const data = await custRes.json();
-      document.getElementById("badgeCustomerCount").textContent = (data.dealers || []).length;
+      const el = document.getElementById("badgeCustomerCount");
+      if (el) el.textContent = (data.dealers || []).length;
     }
-    const payRes = await fetch(`${API_BASE}/api/admin/payouts?status=PENDING`, { headers: authHeaders() });
     if (payRes.ok) {
       const data = await payRes.json();
-      document.getElementById("badgePayoutCount").textContent = (data.payouts || []).length;
+      const el = document.getElementById("badgePayoutCount");
+      if (el) el.textContent = (data.payouts || []).length;
     }
-    const sumRes = await fetch(`${API_BASE}/api/admin/customer-summaries?limit=500`, { headers: authHeaders() });
-    if (sumRes.ok) {
-      const data = await sumRes.json();
-      document.getElementById("badgeSummariesCount").textContent = (data.customers || []).length;
+    // Summaries badge: prefer cached length if tab already loaded
+    if (typeof cachedSummariesData !== "undefined" && cachedSummariesData.length) {
+      const el = document.getElementById("badgeSummariesCount");
+      if (el) el.textContent = cachedSummariesData.length;
     }
   } catch {}
 }
@@ -1894,6 +1901,8 @@ async function loadCustomerSummaries() {
     if (res.status === 401) { clearSessionAndReload(); return; }
     const data = await res.json();
     cachedSummariesData = data.customers || [];
+    const badge = document.getElementById("badgeSummariesCount");
+    if (badge) badge.textContent = cachedSummariesData.length;
     renderSummariesView(data);
     updateHeaderCounts();
   } catch (err) {

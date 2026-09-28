@@ -1,21 +1,29 @@
-PERF: Faster claim submit (public portal + Worker)
-=================================================
+PERF: Admin / Finance / Login / API workflows
+============================================
 
-CLIENT (claim portal)
-- Stronger image compression before upload (960px edge, JPEG ~0.62)
-- createImageBitmap path (faster than FileReader data-URL)
-- Shows ~KB size when photo is ready
-- Product list cached 5 min in sessionStorage (instant reopen)
-- Preconnect / dns-prefetch to Worker API
+ADMIN
+- Boot no longer loads full customer-summaries (was the slow badge call)
+- Header counts (dealers + pending payouts) load in parallel
+- Overview + badges start together
+- Preconnect to Worker API
 
-WORKER
-- Parallel: R2 upload + SHA-256 + device fingerprint + dealer lookup
-- Skip expensive pHash JPEG decode when exact duplicate already found
-- pHash scan reduced 3000 → 400 recent bills
-- Device velocity + multi-mobile + IP checks run in parallel
+FINANCE
+- Submission detail + bill image prefetch in parallel
+- Preconnect to Worker API
+
+LOGIN
+- Preconnect to Worker API (faster first sign-in)
+
+API (Worker)
+- Customer summaries: 7 independent D1 queries in Promise.all
+- Customer dossier profile: parallel stats/wallet/bank/devices/recent
+- Claim rates: one query for all active rates (not per product line)
+
+Also includes prior claim-submit optimisations (fraud + public portal) if you redeploy those files.
 
 UPLOAD
-  Claim Portal: public/app.js, public/index.html
-  Worker:       src/index.ts, src/fraud.ts
+  Admin Pages:  admin/index.html, admin/finance.html, admin/login.html
+  Worker:       src/extras.ts, src/index.ts, src/fraud.ts (optional with claim perf)
+  Claim Portal: public/app.js, public/index.html (optional with claim perf)
 
-Redeploy both. Hard refresh claim page on phone.
+Redeploy Admin + Worker. Hard refresh.
